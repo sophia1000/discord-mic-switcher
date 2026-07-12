@@ -74,10 +74,14 @@ public sealed class SyncCoordinator : IDisposable
 
     private void HandleDeafen(BridgeSignal signal)
     {
+        if (signal.Kind == SignalKind.DiscordDeafen && !signal.Value && _settings.SystemEnabled)
+            LastAction = "Mic sync resumed after Discord was undeafened";
         if (!_settings.DeafenEnabled)
         {
-            LastAction = signal.Kind == SignalKind.DiscordDeafen && signal.Value
-                ? "Mic sync paused while Discord is deafened"
+            LastAction = signal.Kind == SignalKind.DiscordDeafen
+                ? signal.Value ? "Mic sync paused while Discord is deafened" : _settings.SystemEnabled
+                    ? "Mic sync resumed after Discord was undeafened"
+                    : "Discord undeafened; mute sync remains disabled"
                 : "Deafen changed; parameter bridge is off";
             return;
         }

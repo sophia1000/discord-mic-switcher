@@ -13,6 +13,7 @@ public sealed class MainForm : Form
     private static readonly Color Blue = Color.FromArgb(99, 102, 241);
     private static readonly Color Cyan = Color.FromArgb(45, 212, 191);
     private static readonly Color Green = Color.FromArgb(34, 197, 94);
+    private static readonly Color Amber = Color.FromArgb(217, 119, 6);
     private static readonly Color Red = Color.FromArgb(251, 113, 133);
 
     private readonly SyncCoordinator _coordinator;
@@ -220,7 +221,7 @@ public sealed class MainForm : Form
 
     private void WireEvents()
     {
-        _systemEnabled.CheckedChanged += (_, _) => { StyleEnableButton(_systemEnabled); if (!_loading) { _settings.SystemEnabled = _systemEnabled.Checked; SaveSoon(); } };
+        _systemEnabled.CheckedChanged += (_, _) => { StyleMuteEnableButton(); if (!_loading) { _settings.SystemEnabled = _systemEnabled.Checked; SaveSoon(); } };
         _deafenEnabled.CheckedChanged += (_, _) => { StyleEnableButton(_deafenEnabled); if (!_loading) { _settings.DeafenEnabled = _deafenEnabled.Checked; SaveSoon(); } };
         foreach (var (mode, radio) in _muteModes) radio.CheckedChanged += (_, _) => { if (!_loading && radio.Checked) { _settings.MuteMode = mode; StyleModes(); SaveSoon(); } };
         foreach (var (mode, radio) in _deafenModes) radio.CheckedChanged += (_, _) => { if (!_loading && radio.Checked) { _settings.DeafenMode = mode; StyleModes(); SaveSoon(); } };
@@ -255,7 +256,7 @@ public sealed class MainForm : Form
         _receivePort.Value = _settings.OscReceivePort;
         _logging.Checked = _settings.LoggingEnabled;
         UpdateOscModeControls();
-        StyleEnableButton(_systemEnabled);
+        StyleMuteEnableButton();
         StyleEnableButton(_deafenEnabled);
         StyleModes();
     }
@@ -302,7 +303,8 @@ public sealed class MainForm : Form
         _vrcDeafen.Text = !_settings.DeafenEnabled ? "" : _coordinator.Vrchat.DeafenFound ? $"{_settings.DeafenParameter}: {_coordinator.Vrchat.Deafened}" : $"Waiting for {_settings.DeafenParameter}";
         _vrcDeafen.ForeColor = _coordinator.Vrchat.DeafenFound ? Cyan : MutedColor;
         _action.Text = _coordinator.LastAction;
-        if (_systemEnabled.Checked != _settings.SystemEnabled) { _loading = true; _systemEnabled.Checked = _settings.SystemEnabled; _loading = false; StyleEnableButton(_systemEnabled); }
+        if (_systemEnabled.Checked != _settings.SystemEnabled) { _loading = true; _systemEnabled.Checked = _settings.SystemEnabled; _loading = false; }
+        StyleMuteEnableButton();
     }
 
     private static void SetState(Label label, bool? state)
@@ -342,6 +344,14 @@ public sealed class MainForm : Form
         control.Text = control.Checked ? "Enabled" : "Disabled";
         control.BackColor = control.Checked ? Green : Red;
         control.ForeColor = Color.White;
+    }
+
+    private void StyleMuteEnableButton()
+    {
+        bool paused = _systemEnabled.Checked && _coordinator.Discord.Deafened == true;
+        _systemEnabled.Text = paused ? "Paused" : _systemEnabled.Checked ? "Enabled" : "Disabled";
+        _systemEnabled.BackColor = paused ? Amber : _systemEnabled.Checked ? Green : Red;
+        _systemEnabled.ForeColor = Color.White;
     }
 
     private static void Style(Dictionary<SyncMode, RadioButton> controls, SyncMode selected, Color active, Color activeText)
