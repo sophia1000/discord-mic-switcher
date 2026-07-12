@@ -39,7 +39,7 @@ public sealed class SyncCoordinator : IDisposable
                 {
                     _settings.SystemEnabled = signal.Value;
                     _store.Save(_settings);
-                    LastAction = signal.Value ? "Sync enabled by VRChat parameter" : "Sync paused by VRChat parameter";
+                    LastAction = signal.Value ? "Mute sync enabled by VRChat parameter" : "Mute sync disabled by VRChat parameter";
                     if (signal.Value) SynchronizeAll();
                 }
                 Notify();
@@ -74,7 +74,7 @@ public sealed class SyncCoordinator : IDisposable
 
     private void HandleDeafen(BridgeSignal signal)
     {
-        if (!_settings.SystemEnabled || !_settings.DeafenEnabled)
+        if (!_settings.DeafenEnabled)
         {
             LastAction = signal.Kind == SignalKind.DiscordDeafen && signal.Value
                 ? "Mic sync paused while Discord is deafened"
@@ -147,8 +147,8 @@ public sealed class SyncCoordinator : IDisposable
     {
         lock (_gate)
         {
-            if (!_settings.SystemEnabled) { LastAction = "Sync paused"; return; }
-            if (Discord.Deafened == true) LastAction = "Mic sync paused while Discord is deafened";
+            if (!_settings.SystemEnabled) LastAction = "Mute sync disabled";
+            else if (Discord.Deafened == true) LastAction = "Mute sync paused while Discord is deafened";
             else if (_settings.MuteMode == SyncMode.VrchatMaster && Vrchat.MuteFound && Vrchat.Muted.HasValue)
                 SetDiscordMute(!Vrchat.Muted.Value, "VRChat is master");
             else if (_settings.MuteMode == SyncMode.DiscordMaster && Vrchat.MuteFound && Discord.Muted.HasValue)

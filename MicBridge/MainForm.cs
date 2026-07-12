@@ -11,6 +11,7 @@ public sealed class MainForm : Form
     private static readonly Color MutedColor = Color.FromArgb(154, 166, 195);
     private static readonly Color Blue = Color.FromArgb(88, 101, 242);
     private static readonly Color Cyan = Color.FromArgb(45, 212, 191);
+    private static readonly Color Green = Color.FromArgb(34, 197, 94);
     private static readonly Color Red = Color.FromArgb(251, 113, 133);
 
     private readonly SyncCoordinator _coordinator;
@@ -28,8 +29,8 @@ public sealed class MainForm : Form
     private readonly Label _vrcInfo = NewLabel("Waiting for MuteSelf", 9);
     private readonly Label _vrcDeafen = NewLabel("Deafen parameter: off", 9, true);
     private readonly Label _action = NewLabel("Starting…", 9);
-    private readonly CheckBox _systemEnabled = NewCheck("SYNC ON");
-    private readonly CheckBox _deafenEnabled = NewCheck("ENABLE DEAFEN PARAMETER BRIDGE");
+    private readonly CheckBox _systemEnabled = NewCheck("");
+    private readonly CheckBox _deafenEnabled = NewCheck("");
     private readonly Dictionary<SyncMode, RadioButton> _muteModes = [];
     private readonly Dictionary<SyncMode, RadioButton> _deafenModes = [];
     private readonly TextBox _muteParameter = NewTextBox();
@@ -72,8 +73,7 @@ public sealed class MainForm : Form
         var header = new Panel { Dock = DockStyle.Fill, BackColor = Bg };
         var title = NewLabel("MIC BRIDGE", 23, true); title.AutoSize = true; title.Location = new Point(0, 4);
         var sub = NewLabel("Native Discord  ↔  VRChat", 10); sub.AutoSize = true; sub.Location = new Point(190, 16);
-        _systemEnabled.AutoSize = true; _systemEnabled.ForeColor = Cyan; _systemEnabled.Location = new Point(690, 12); _systemEnabled.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        header.Controls.AddRange([title, sub, _systemEnabled]);
+        header.Controls.AddRange([title, sub]);
         root.Controls.Add(header, 0, 0);
 
         var tabs = new TabControl { Dock = DockStyle.Fill, Appearance = TabAppearance.Normal, Padding = new Point(16, 7) };
@@ -91,7 +91,7 @@ public sealed class MainForm : Form
         var page = NewPage("Bridge");
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Bg, Padding = new Padding(12), RowCount = 4 };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 175));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 175));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 205));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 205));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -101,10 +101,14 @@ public sealed class MainForm : Form
         status.Controls.Add(StatusCard("DISCORD", _discordState, _discordInfo, _discordDeafen), 0, 0);
         status.Controls.Add(StatusCard("VRCHAT", _vrcState, _vrcConnection, _vrcInfo, _vrcDeafen), 1, 0);
         layout.Controls.Add(status, 0, 0);
-        layout.Controls.Add(DirectionCard("MUTE DIRECTION", _muteModes), 0, 1);
+        var muteCard = DirectionCard("MUTE DIRECTION", _muteModes);
+        ConfigureEnableButton(_systemEnabled);
+        muteCard.Controls.Add(_systemEnabled);
+        foreach (var radio in _muteModes.Values) radio.Top += 34;
+        layout.Controls.Add(muteCard, 0, 1);
 
         var deafenCard = DirectionCard("DEAFEN PARAMETER DIRECTION", _deafenModes);
-        _deafenEnabled.AutoSize = true; _deafenEnabled.ForeColor = Cyan; _deafenEnabled.Location = new Point(18, 42);
+        ConfigureEnableButton(_deafenEnabled);
         deafenCard.Controls.Add(_deafenEnabled);
         foreach (var radio in _deafenModes.Values) radio.Top += 34;
         layout.Controls.Add(deafenCard, 0, 2);
@@ -181,8 +185,8 @@ public sealed class MainForm : Form
 
     private void WireEvents()
     {
-        _systemEnabled.CheckedChanged += (_, _) => { if (!_loading) { _settings.SystemEnabled = _systemEnabled.Checked; SaveSoon(); } };
-        _deafenEnabled.CheckedChanged += (_, _) => { if (!_loading) { _settings.DeafenEnabled = _deafenEnabled.Checked; SaveSoon(); } };
+        _systemEnabled.CheckedChanged += (_, _) => { StyleEnableButton(_systemEnabled); if (!_loading) { _settings.SystemEnabled = _systemEnabled.Checked; SaveSoon(); } };
+        _deafenEnabled.CheckedChanged += (_, _) => { StyleEnableButton(_deafenEnabled); if (!_loading) { _settings.DeafenEnabled = _deafenEnabled.Checked; SaveSoon(); } };
         foreach (var (mode, radio) in _muteModes) radio.CheckedChanged += (_, _) => { if (!_loading && radio.Checked) { _settings.MuteMode = mode; StyleModes(); SaveSoon(); } };
         foreach (var (mode, radio) in _deafenModes) radio.CheckedChanged += (_, _) => { if (!_loading && radio.Checked) { _settings.DeafenMode = mode; StyleModes(); SaveSoon(); } };
         foreach (var text in new[] { _muteParameter, _toggleParameter, _deafenParameter, _vrchatIp }) text.TextChanged += (_, _) => { if (!_loading) SaveSoon(); };
@@ -216,6 +220,8 @@ public sealed class MainForm : Form
         _receivePort.Value = _settings.OscReceivePort;
         _logging.Checked = _settings.LoggingEnabled;
         UpdateOscModeControls();
+        StyleEnableButton(_systemEnabled);
+        StyleEnableButton(_deafenEnabled);
         StyleModes();
     }
 
@@ -258,10 +264,10 @@ public sealed class MainForm : Form
         _vrcConnection.ForeColor = _coordinator.Vrchat.Connected ? (_coordinator.Vrchat.TargetReady ? Cyan : MutedColor) : Red;
         _vrcInfo.Text = _coordinator.Vrchat.MuteFound ? $"{_settings.MuteParameter} detected" : $"Waiting for {_settings.MuteParameter}";
         _vrcInfo.ForeColor = _coordinator.Vrchat.MuteFound ? Cyan : MutedColor;
-        _vrcDeafen.Text = !_settings.DeafenEnabled ? "Deafen parameter bridge: off" : _coordinator.Vrchat.DeafenFound ? $"{_settings.DeafenParameter}: {_coordinator.Vrchat.Deafened}" : $"Waiting for {_settings.DeafenParameter}";
+        _vrcDeafen.Text = !_settings.DeafenEnabled ? "" : _coordinator.Vrchat.DeafenFound ? $"{_settings.DeafenParameter}: {_coordinator.Vrchat.Deafened}" : $"Waiting for {_settings.DeafenParameter}";
         _vrcDeafen.ForeColor = _coordinator.Vrchat.DeafenFound ? Cyan : MutedColor;
         _action.Text = _coordinator.LastAction;
-        if (_systemEnabled.Checked != _settings.SystemEnabled) { _loading = true; _systemEnabled.Checked = _settings.SystemEnabled; _loading = false; }
+        if (_systemEnabled.Checked != _settings.SystemEnabled) { _loading = true; _systemEnabled.Checked = _settings.SystemEnabled; _loading = false; StyleEnableButton(_systemEnabled); }
     }
 
     private static void SetState(Label label, bool? state)
@@ -282,6 +288,24 @@ public sealed class MainForm : Form
         _vrchatIp.Enabled = manual;
         _sendPort.Enabled = manual;
         _receivePort.Enabled = manual;
+    }
+
+    private static void ConfigureEnableButton(CheckBox control)
+    {
+        control.Appearance = Appearance.Button;
+        control.AutoSize = false;
+        control.Size = new Size(160, 34);
+        control.Location = new Point(18, 42);
+        control.TextAlign = ContentAlignment.MiddleCenter;
+        control.Cursor = Cursors.Hand;
+        control.FlatAppearance.BorderSize = 0;
+    }
+
+    private static void StyleEnableButton(CheckBox control)
+    {
+        control.Text = control.Checked ? "Enabled" : "Disabled";
+        control.BackColor = control.Checked ? Green : Red;
+        control.ForeColor = Color.White;
     }
 
     private static void Style(Dictionary<SyncMode, RadioButton> controls, SyncMode selected, Color active, Color activeText)
