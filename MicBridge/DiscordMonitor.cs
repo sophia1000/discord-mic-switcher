@@ -182,6 +182,7 @@ public sealed class DiscordMonitor : IDisposable
             }
             _expectedMute = target;
             _expectedMuteUntil = DateTime.UtcNow.AddSeconds(4);
+            if (TryToggleButton(_muteButton, "mute")) return true;
             if (NativeKeyboard.SendHotkey(_settings.MuteHotkey))
             {
                 _log.Write($"Discord mute hotkey sent: {_settings.MuteHotkey}");
@@ -205,6 +206,7 @@ public sealed class DiscordMonitor : IDisposable
             }
             _expectedDeafen = target;
             _expectedDeafenUntil = DateTime.UtcNow.AddSeconds(4);
+            if (TryToggleButton(_deafenButton, "deafen")) return true;
             if (NativeKeyboard.SendHotkey(_settings.DeafenHotkey))
             {
                 _log.Write($"Discord deafen hotkey sent: {_settings.DeafenHotkey}");
@@ -212,6 +214,22 @@ public sealed class DiscordMonitor : IDisposable
             }
             _log.Write($"Discord deafen hotkey failed: Windows error {NativeKeyboard.LastSendError}");
             _expectedDeafen = null;
+            return false;
+        }
+    }
+
+    private bool TryToggleButton(AutomationElement? button, string command)
+    {
+        try
+        {
+            if (button is null || !button.Patterns.Toggle.IsSupported) return false;
+            button.Patterns.Toggle.Pattern.Toggle();
+            _log.Write($"Discord {command} toggled through accessibility control");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log.Write($"Discord {command} accessibility toggle failed; trying hotkey: {ex.Message}");
             return false;
         }
     }
