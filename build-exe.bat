@@ -6,4 +6,4 @@ if errorlevel 1 exit /b %errorlevel%
 if exist "dist\MicBridge\MicBridge.pdb" del /q "dist\MicBridge\MicBridge.pdb"
 echo.
 echo Built: %~dp0dist\MicBridge\MicBridge.exe
-pause
+if /i not "%~1"=="--no-pause" pause

@@ -3,7 +3,15 @@
 Sophia's Mic Bridge is a native C# Windows application. It does not require Python,
 the .NET runtime, or separate dependency files.
 
-Run the application with `launch.bat`, or directly open:
+For a normal Windows installation, download and run:
+
+`SophiasMicBridgeSetup.exe`
+
+The installer adds Sophia's Mic Bridge to Windows Search and the Start Menu,
+registers it in Installed Apps for clean uninstallation, and offers optional
+desktop and start-with-Windows shortcuts.
+
+For portable use, run the application with `launch.bat`, or directly open:
 
 `dist\MicBridge\MicBridge.exe`
 
@@ -49,7 +57,18 @@ Choose **Manual IP and ports** to use the legacy fixed configuration instead.
 The default manual destination is `127.0.0.1:9000`, with Mic Bridge listening
 on the saved receive port.
 
-## Rebuilding the EXE
+## Building the installer
+
+Install the .NET 10 SDK and Inno Setup 6, then run `build-installer.bat`. It
+builds the application and produces the single-file installer at:
+
+`dist\installer\SophiasMicBridgeSetup.exe`
+
+If Inno Setup is missing, install it with:
+
+`winget install --id JRSoftware.InnoSetup -e`
+
+## Rebuilding the portable EXE
 
 Install the .NET 10 SDK and run `build-exe.bat`. The script publishes a
 self-contained, single-file Windows x64 executable to:
