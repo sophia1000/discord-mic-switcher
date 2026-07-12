@@ -157,7 +157,7 @@ public sealed class DiscordMonitor : IDisposable
             if (mute is not null) _muteButton = mute;
             if (deafen is not null) _deafenButton = deafen;
         }
-        _log.Write($"Discord UI targeted scan: mute={mute is not null} id={mute?.AutomationId}, deafen={deafen is not null} id={deafen?.AutomationId}, elapsed={(DateTime.UtcNow - started).TotalMilliseconds:F0}ms");
+        _log.Write($"Discord UI targeted scan: mute={mute is not null}, deafen={deafen is not null}, elapsed={(DateTime.UtcNow - started).TotalMilliseconds:F0}ms");
     }
 
     private AutomationElement? FindNamedToggle(IEnumerable<string> names)

@@ -19,7 +19,7 @@ public enum OscConnectionMode
 
 public sealed class AppSettings
 {
-    [JsonPropertyName("settings_version")] public int SettingsVersion { get; set; } = 2;
+    [JsonPropertyName("settings_version")] public int SettingsVersion { get; set; }
     [JsonPropertyName("system_enabled")] public bool SystemEnabled { get; set; } = true;
     [JsonPropertyName("sync_mode")] public SyncMode MuteMode { get; set; } = SyncMode.Dynamic;
     [JsonPropertyName("deafen_sync_enabled")] public bool DeafenEnabled { get; set; }
@@ -96,10 +96,10 @@ public sealed class SettingsStore
 
     private static void Normalize(AppSettings s)
     {
-        if (s.SettingsVersion < 2)
+        if (s.SettingsVersion < 3)
         {
             if (s.DiscordPollMs == 100) s.DiscordPollMs = 60;
-            s.SettingsVersion = 2;
+            s.SettingsVersion = 3;
         }
         s.DiscordPollMs = Math.Clamp(s.DiscordPollMs, 40, 5000);
         s.OscSendPort = Math.Clamp(s.OscSendPort, 1, 65535);
