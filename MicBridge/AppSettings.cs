@@ -30,7 +30,7 @@ public sealed class AppSettings
     [JsonPropertyName("osc_connection_mode")] public OscConnectionMode OscConnectionMode { get; set; } = OscConnectionMode.OscQuery;
     [JsonPropertyName("vrchat_osc_ip")] public string VrchatIp { get; set; } = "127.0.0.1";
     [JsonPropertyName("vrchat_osc_send_port")] public int OscSendPort { get; set; } = 9000;
-    [JsonPropertyName("vrchat_osc_receive_port")] public int OscReceivePort { get; set; } = 9123;
+    [JsonPropertyName("vrchat_osc_receive_port")] public int OscReceivePort { get; set; } = 9001;
     [JsonPropertyName("vrchat_voice_press_ms")] public int VrchatVoicePressMs { get; set; } = 80;
     [JsonPropertyName("mute_parameter_name")] public string MuteParameter { get; set; } = "MuteSelf";
     [JsonPropertyName("toggle_parameter_name")] public string ToggleParameter { get; set; } = "ToggleMicSync";
