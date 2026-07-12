@@ -115,7 +115,7 @@ public sealed class SyncCoordinator : IDisposable
     private void SetDiscordDeafen(bool target, string reason)
     {
         bool sent = Discord.SetDeafen(target);
-        LastAction = Discord.Ready ? $"{reason} → Discord {(target ? "deafened" : "undeafened")}{(sent ? "" : " (already correct)")}" : "Waiting for Discord deafen state";
+        LastAction = Discord.DeafenReady ? $"{reason} → Discord {(target ? "deafened" : "undeafened")}{(sent ? "" : " (already correct)")}" : "Waiting for Discord deafen state";
         _log.Write(LastAction);
     }
 

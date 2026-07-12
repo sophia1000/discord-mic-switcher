@@ -6,6 +6,11 @@ namespace MicBridge;
 
 public sealed class DiscordMonitor : IDisposable
 {
+    private const int StableReadCount = 2;
+    private const int MaxCommandAttempts = 5;
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(750);
+
     private readonly AppSettings _settings;
     private readonly AppLog _log;
     private readonly object _gate = new();
@@ -16,8 +21,6 @@ public sealed class DiscordMonitor : IDisposable
     private AutomationElement? _deafenButton;
     private UIA3Automation? _automation;
     private nint _hwnd;
-    private DateTime _attachedAt;
-    private DateTime _scannedAt;
     private bool? _rawMute, _rawDeafen;
     private int _muteStreak, _deafenStreak;
     private bool? _muted, _deafened;
@@ -28,7 +31,9 @@ public sealed class DiscordMonitor : IDisposable
 
     public event Action<BridgeSignal>? Signal;
     public event Action? StatusChanged;
-    public bool Ready { get; private set; }
+    public bool Ready => MuteReady;
+    public bool MuteReady { get; private set; }
+    public bool DeafenReady { get; private set; }
     public bool? Muted { get { lock (_gate) return _muted; } }
     public bool? Deafened { get { lock (_gate) return _deafened; } }
 
@@ -37,7 +42,6 @@ public sealed class DiscordMonitor : IDisposable
     public void Start()
     {
         _thread = new Thread(PollLoop) { IsBackground = true, Name = "Discord UI Automation" };
-        // UI Automation calls into Chromium are most reliable from MTA.
         _thread.SetApartmentState(ApartmentState.MTA);
         _thread.Start();
     }
@@ -53,18 +57,37 @@ public sealed class DiscordMonitor : IDisposable
                 var (mute, deafen) = ReadStates();
                 (_rawMute, _muteStreak) = Debounce(mute, _rawMute, _muteStreak);
                 (_rawDeafen, _deafenStreak) = Debounce(deafen, _rawDeafen, _deafenStreak);
-                bool ready = mute.HasValue && deafen.HasValue;
-                if (ready != Ready) { Ready = ready; StatusChanged?.Invoke(); }
-                Accept(_muteStreak >= 3 ? _rawMute : null, _deafenStreak >= 3 ? _rawDeafen : null);
+
+                bool muteReady = mute.HasValue;
+                bool deafenReady = deafen.HasValue;
+                if (muteReady != MuteReady || deafenReady != DeafenReady)
+                {
+                    MuteReady = muteReady;
+                    DeafenReady = deafenReady;
+                    StatusChanged?.Invoke();
+                }
+
+                bool muteAcknowledged, deafenAcknowledged;
+                lock (_gate)
+                {
+                    muteAcknowledged = mute.HasValue && _expectedMute == mute;
+                    deafenAcknowledged = deafen.HasValue && _expectedDeafen == deafen;
+                }
+                Accept(muteAcknowledged ? mute : _muteStreak >= StableReadCount ? _rawMute : null,
+                    deafenAcknowledged ? deafen : _deafenStreak >= StableReadCount ? _rawDeafen : null);
                 RetryPendingCommands();
             }
             catch (Exception ex)
             {
-                if (Ready) { Ready = false; StatusChanged?.Invoke(); }
+                if (MuteReady || DeafenReady)
+                {
+                    MuteReady = DeafenReady = false;
+                    StatusChanged?.Invoke();
+                }
                 _log.Write("Discord UIA read failed: " + ex.Message);
-                _root = null;
+                InvalidateRoot();
             }
-            _stop.Token.WaitHandle.WaitOne(Math.Clamp(_settings.DiscordPollMs, 50, 5000));
+            _stop.Token.WaitHandle.WaitOne(Math.Clamp(_settings.DiscordPollMs, 40, 5000));
         }
         _automation.Dispose();
         _automation = null;
@@ -78,58 +101,79 @@ public sealed class DiscordMonitor : IDisposable
 
     private (bool? mute, bool? deafen) ReadStates()
     {
-        if (_root is null || DateTime.UtcNow - _attachedAt > TimeSpan.FromSeconds(10)) Attach();
+        if (_root is null || _hwnd == 0 || !NativeWindows.IsWindow(_hwnd)) Attach();
         if (_root is null || _hwnd == 0 || NativeWindows.IsHungAppWindow(_hwnd)) return (null, null);
-        if (_muteButton is null || _deafenButton is null ||
-            DateTime.UtcNow - _scannedAt > TimeSpan.FromSeconds(_settings.DiscordRescanSeconds)) Scan();
-        bool? mute = ReadToggle(_muteButton);
-        bool? deafen = ReadToggle(_deafenButton);
-        if (!mute.HasValue || !deafen.HasValue)
+
+        AutomationElement? muteButton, deafenButton;
+        lock (_gate) { muteButton = _muteButton; deafenButton = _deafenButton; }
+        if (muteButton is null || deafenButton is null)
         {
             Scan();
-            mute = ReadToggle(_muteButton);
-            deafen = ReadToggle(_deafenButton);
+            lock (_gate) { muteButton = _muteButton; deafenButton = _deafenButton; }
+        }
+
+        bool? mute = ReadToggle(muteButton);
+        bool? deafen = ReadToggle(deafenButton);
+        if (!mute.HasValue || !deafen.HasValue)
+        {
+            lock (_gate)
+            {
+                if (!mute.HasValue) _muteButton = null;
+                if (!deafen.HasValue) _deafenButton = null;
+            }
+            Scan();
+            lock (_gate) { muteButton = _muteButton; deafenButton = _deafenButton; }
+            mute = ReadToggle(muteButton);
+            deafen = ReadToggle(deafenButton);
         }
         return (mute, deafen);
     }
 
     private void Attach()
     {
-        _hwnd = NativeWindows.FindDiscordWindow();
-        _root = _hwnd == 0 ? null : _automation?.FromHandle(_hwnd);
-        _attachedAt = DateTime.UtcNow;
-        _scannedAt = DateTime.MinValue;
-        _muteButton = _deafenButton = null;
+        nint hwnd = NativeWindows.FindDiscordWindow();
+        AutomationElement? root = hwnd == 0 ? null : _automation?.FromHandle(hwnd);
+        _hwnd = hwnd;
+        _root = root;
+        lock (_gate) { _muteButton = _deafenButton = null; }
         _log.Write($"Discord UIA attach: hwnd={_hwnd}, found={_root is not null}");
-        if (_root is not null) Thread.Sleep(50);
+    }
+
+    private void InvalidateRoot()
+    {
+        _root = null;
+        _hwnd = 0;
+        lock (_gate) { _muteButton = _deafenButton = null; }
     }
 
     private void Scan()
     {
         if (_root is null) return;
-        _muteButton = _deafenButton = null;
         var started = DateTime.UtcNow;
-        var buttons = _root.FindAllDescendants(cf => cf.ByControlType(ControlType.Button));
-        foreach (AutomationElement button in buttons)
+        AutomationElement? mute = FindNamedToggle(_settings.DiscordMuteNames);
+        AutomationElement? deafen = FindNamedToggle(_settings.DiscordDeafenNames);
+        lock (_gate)
         {
-            string name;
-            try
-            {
-                name = button.Name?.Trim() ?? "";
-                if (!button.IsEnabled || button.IsOffscreen) continue;
-            }
-            catch { continue; }
-            if (_muteButton is null && _settings.DiscordMuteNames.Contains(name, StringComparer.OrdinalIgnoreCase)
-                && SupportsToggle(button)) _muteButton = button;
-            if (_deafenButton is null && _settings.DiscordDeafenNames.Contains(name, StringComparer.OrdinalIgnoreCase)
-                && SupportsToggle(button)) _deafenButton = button;
-            if (_muteButton is not null && _deafenButton is not null) break;
+            if (mute is not null) _muteButton = mute;
+            if (deafen is not null) _deafenButton = deafen;
         }
-        _scannedAt = DateTime.UtcNow;
-        _log.Write($"Discord UI buttons: count={buttons.Length}, mute={_muteButton is not null}, deafen={_deafenButton is not null}, elapsed={(DateTime.UtcNow - started).TotalMilliseconds:F0}ms");
+        _log.Write($"Discord UI targeted scan: mute={mute is not null} id={mute?.AutomationId}, deafen={deafen is not null} id={deafen?.AutomationId}, elapsed={(DateTime.UtcNow - started).TotalMilliseconds:F0}ms");
     }
 
-    private static bool SupportsToggle(AutomationElement element) => element.Patterns.Toggle.IsSupported;
+    private AutomationElement? FindNamedToggle(IEnumerable<string> names)
+    {
+        foreach (string name in names.Where(value => !string.IsNullOrWhiteSpace(value)))
+        {
+            try
+            {
+                var element = _root?.FindFirstDescendant(cf =>
+                    cf.ByControlType(ControlType.Button).And(cf.ByName(name)));
+                if (element is not null && element.IsEnabled && element.Patterns.Toggle.IsSupported) return element;
+            }
+            catch { }
+        }
+        return null;
+    }
 
     private static bool? ReadToggle(AutomationElement? element)
     {
@@ -174,47 +218,47 @@ public sealed class DiscordMonitor : IDisposable
         }
     }
 
-    public bool SetMute(bool target)
-    {
-        AutomationElement? button;
-        lock (_gate)
-        {
-            if (!Ready || !_muted.HasValue || _muted == target) return false;
-            if (_expectedMute.HasValue && DateTime.UtcNow <= _expectedMuteUntil)
-            {
-                _log.Write($"Discord mute command suppressed: command for {_expectedMute.Value} is still pending");
-                return _expectedMute == target;
-            }
-            _expectedMute = target;
-            _expectedMuteUntil = DateTime.UtcNow.AddSeconds(10);
-            button = _muteButton;
-            _muteCommandAttempts = button is null ? 0 : 1;
-            _nextMuteCommandAt = DateTime.UtcNow.AddMilliseconds(button is null ? 100 : 1400);
-        }
-        if (button is not null && TryToggleButton(button, "mute", 1)) return true;
-        _log.Write("Discord mute command queued until its accessibility button is ready");
-        return true;
-    }
+    public bool SetMute(bool target) => QueueCommand(target, true);
+    public bool SetDeafen(bool target) => QueueCommand(target, false);
 
-    public bool SetDeafen(bool target)
+    private bool QueueCommand(bool target, bool muteCommand)
     {
         AutomationElement? button;
+        int attempt;
+        DateTime now = DateTime.UtcNow;
         lock (_gate)
         {
-            if (!Ready || !_deafened.HasValue || _deafened == target) return false;
-            if (_expectedDeafen.HasValue && DateTime.UtcNow <= _expectedDeafenUntil)
+            bool ready = muteCommand ? MuteReady : DeafenReady;
+            bool? current = muteCommand ? _muted : _deafened;
+            bool? expected = muteCommand ? _expectedMute : _expectedDeafen;
+            DateTime expectedUntil = muteCommand ? _expectedMuteUntil : _expectedDeafenUntil;
+            if (!ready || !current.HasValue || current == target) return false;
+            if (expected.HasValue && now <= expectedUntil)
             {
-                _log.Write($"Discord deafen command suppressed: command for {_expectedDeafen.Value} is still pending");
-                return _expectedDeafen == target;
+                _log.Write($"Discord {(muteCommand ? "mute" : "deafen")} command coalesced with pending target {expected.Value}");
+                return expected == target;
             }
-            _expectedDeafen = target;
-            _expectedDeafenUntil = DateTime.UtcNow.AddSeconds(10);
-            button = _deafenButton;
-            _deafenCommandAttempts = button is null ? 0 : 1;
-            _nextDeafenCommandAt = DateTime.UtcNow.AddMilliseconds(button is null ? 100 : 1400);
+
+            button = muteCommand ? _muteButton : _deafenButton;
+            attempt = button is null ? 0 : 1;
+            if (muteCommand)
+            {
+                _expectedMute = target;
+                _expectedMuteUntil = now + CommandTimeout;
+                _muteCommandAttempts = attempt;
+                _nextMuteCommandAt = now + (button is null ? TimeSpan.FromMilliseconds(50) : RetryDelay);
+            }
+            else
+            {
+                _expectedDeafen = target;
+                _expectedDeafenUntil = now + CommandTimeout;
+                _deafenCommandAttempts = attempt;
+                _nextDeafenCommandAt = now + (button is null ? TimeSpan.FromMilliseconds(50) : RetryDelay);
+            }
         }
-        if (button is not null && TryToggleButton(button, "deafen", 1)) return true;
-        _log.Write("Discord deafen command queued until its accessibility button is ready");
+
+        if (button is not null && TryToggleButton(button, muteCommand, attempt)) return true;
+        _log.Write($"Discord {(muteCommand ? "mute" : "deafen")} command queued until accessibility control is ready");
         return true;
     }
 
@@ -227,50 +271,63 @@ public sealed class DiscordMonitor : IDisposable
         {
             if (_expectedMute.HasValue)
             {
-                if (now > _expectedMuteUntil || _muteCommandAttempts >= 4)
+                if (now > _expectedMuteUntil || _muteCommandAttempts >= MaxCommandAttempts)
                 {
-                    _log.Write($"Discord mute command failed after {_muteCommandAttempts} accessibility attempts");
+                    _log.Write($"Discord mute command failed after {_muteCommandAttempts} verified attempts");
                     _expectedMute = null;
                 }
                 else if (now >= _nextMuteCommandAt && _muteButton is not null)
                 {
                     muteButton = _muteButton;
                     muteAttempt = ++_muteCommandAttempts;
-                    _nextMuteCommandAt = now.AddMilliseconds(1400);
+                    _nextMuteCommandAt = now + RetryDelay;
                 }
             }
             if (_expectedDeafen.HasValue)
             {
-                if (now > _expectedDeafenUntil || _deafenCommandAttempts >= 4)
+                if (now > _expectedDeafenUntil || _deafenCommandAttempts >= MaxCommandAttempts)
                 {
-                    _log.Write($"Discord deafen command failed after {_deafenCommandAttempts} accessibility attempts");
+                    _log.Write($"Discord deafen command failed after {_deafenCommandAttempts} verified attempts");
                     _expectedDeafen = null;
                 }
                 else if (now >= _nextDeafenCommandAt && _deafenButton is not null)
                 {
                     deafenButton = _deafenButton;
                     deafenAttempt = ++_deafenCommandAttempts;
-                    _nextDeafenCommandAt = now.AddMilliseconds(1400);
+                    _nextDeafenCommandAt = now + RetryDelay;
                 }
             }
         }
-        if (muteButton is not null) TryToggleButton(muteButton, "mute", muteAttempt);
-        if (deafenButton is not null) TryToggleButton(deafenButton, "deafen", deafenAttempt);
+        if (muteButton is not null) TryToggleButton(muteButton, true, muteAttempt);
+        if (deafenButton is not null) TryToggleButton(deafenButton, false, deafenAttempt);
     }
 
-    private bool TryToggleButton(AutomationElement button, string command, int attempt)
+    private bool TryToggleButton(AutomationElement button, bool muteCommand, int attempt)
     {
+        string command = muteCommand ? "mute" : "deafen";
         try
         {
-            if (!button.Patterns.Toggle.IsSupported) return false;
+            if (!button.Patterns.Toggle.IsSupported) throw new InvalidOperationException("Toggle pattern is unavailable");
             button.Patterns.Toggle.Pattern.Toggle();
-            _log.Write($"Discord {command} toggled through accessibility control (attempt {attempt})");
+            _log.Write($"Discord {command} accessibility command sent (attempt {attempt})");
             return true;
         }
         catch (Exception ex)
         {
-            _log.Write($"Discord {command} accessibility toggle attempt {attempt} failed: {ex.Message}");
-            _scannedAt = DateTime.MinValue;
+            lock (_gate)
+            {
+                if (muteCommand)
+                {
+                    _muteButton = null;
+                    _nextMuteCommandAt = DateTime.UtcNow.AddMilliseconds(50);
+                }
+                else
+                {
+                    _deafenButton = null;
+                    _nextDeafenCommandAt = DateTime.UtcNow.AddMilliseconds(50);
+                }
+            }
+            _log.Write($"Discord {command} accessibility attempt {attempt} failed: {ex.Message}");
             return false;
         }
     }

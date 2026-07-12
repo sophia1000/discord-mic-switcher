@@ -19,12 +19,12 @@ public enum OscConnectionMode
 
 public sealed class AppSettings
 {
+    [JsonPropertyName("settings_version")] public int SettingsVersion { get; set; } = 2;
     [JsonPropertyName("system_enabled")] public bool SystemEnabled { get; set; } = true;
     [JsonPropertyName("sync_mode")] public SyncMode MuteMode { get; set; } = SyncMode.Dynamic;
     [JsonPropertyName("deafen_sync_enabled")] public bool DeafenEnabled { get; set; }
     [JsonPropertyName("deafen_sync_mode")] public SyncMode DeafenMode { get; set; } = SyncMode.Dynamic;
-    [JsonPropertyName("discord_poll_interval_ms")] public int DiscordPollMs { get; set; } = 100;
-    [JsonPropertyName("discord_rescan_every_s")] public double DiscordRescanSeconds { get; set; } = 6;
+    [JsonPropertyName("discord_poll_interval_ms")] public int DiscordPollMs { get; set; } = 60;
     [JsonPropertyName("discord_mute_names")] public string[] DiscordMuteNames { get; set; } = ["Mute", "Unmute"];
     [JsonPropertyName("discord_deafen_names")] public string[] DiscordDeafenNames { get; set; } = ["Deafen", "Undeafen"];
     [JsonPropertyName("osc_connection_mode")] public OscConnectionMode OscConnectionMode { get; set; } = OscConnectionMode.OscQuery;
@@ -96,7 +96,12 @@ public sealed class SettingsStore
 
     private static void Normalize(AppSettings s)
     {
-        s.DiscordPollMs = Math.Clamp(s.DiscordPollMs, 50, 5000);
+        if (s.SettingsVersion < 2)
+        {
+            if (s.DiscordPollMs == 100) s.DiscordPollMs = 60;
+            s.SettingsVersion = 2;
+        }
+        s.DiscordPollMs = Math.Clamp(s.DiscordPollMs, 40, 5000);
         s.OscSendPort = Math.Clamp(s.OscSendPort, 1, 65535);
         s.OscReceivePort = Math.Clamp(s.OscReceivePort, 1, 65535);
         s.VrchatVoicePressMs = Math.Clamp(s.VrchatVoicePressMs, 20, 1000);
