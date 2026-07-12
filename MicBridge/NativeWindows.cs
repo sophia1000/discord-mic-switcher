@@ -65,12 +65,18 @@ internal static class NativeKeyboard
     {
         var keys = Parse(text);
         if (keys.Count == 0) { LastSendError = 87; return false; }
-        var inputs = new List<Input>(keys.Count * 2);
-        foreach (ushort key in keys) inputs.Add(Make(key, false));
-        for (int i = keys.Count - 1; i >= 0; i--) inputs.Add(Make(keys[i], true));
-        uint sent = SendInput((uint)inputs.Count, inputs.ToArray(), InputStructureSize);
-        LastSendError = sent == inputs.Count ? 0 : Marshal.GetLastWin32Error();
-        return sent == inputs.Count;
+        Input[] down = keys.Select(key => Make(key, false)).ToArray();
+        Input[] up = keys.AsEnumerable().Reverse().Select(key => Make(key, true)).ToArray();
+
+        uint pressed = SendInput((uint)down.Length, down, InputStructureSize);
+        int pressError = pressed == down.Length ? 0 : Marshal.GetLastWin32Error();
+        // Electron's global shortcut handler can miss a chord whose down/up
+        // events are delivered in one zero-duration SendInput batch.
+        Thread.Sleep(60);
+        uint released = SendInput((uint)up.Length, up, InputStructureSize);
+        int releaseError = released == up.Length ? 0 : Marshal.GetLastWin32Error();
+        LastSendError = pressError != 0 ? pressError : releaseError;
+        return pressed == down.Length && released == up.Length;
     }
 
     private static Input Make(ushort key, bool up) => new()

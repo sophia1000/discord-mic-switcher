@@ -175,8 +175,13 @@ public sealed class DiscordMonitor : IDisposable
         lock (_gate)
         {
             if (CommandsSuspended || !Ready || !_muted.HasValue || _muted == target || string.IsNullOrWhiteSpace(_settings.MuteHotkey)) return false;
+            if (_expectedMute.HasValue && DateTime.UtcNow <= _expectedMuteUntil)
+            {
+                _log.Write($"Discord mute hotkey suppressed: command for {_expectedMute.Value} is still pending");
+                return _expectedMute == target;
+            }
             _expectedMute = target;
-            _expectedMuteUntil = DateTime.UtcNow.AddSeconds(2);
+            _expectedMuteUntil = DateTime.UtcNow.AddSeconds(4);
             if (NativeKeyboard.SendHotkey(_settings.MuteHotkey))
             {
                 _log.Write($"Discord mute hotkey sent: {_settings.MuteHotkey}");
@@ -193,8 +198,13 @@ public sealed class DiscordMonitor : IDisposable
         lock (_gate)
         {
             if (CommandsSuspended || !Ready || !_deafened.HasValue || _deafened == target || string.IsNullOrWhiteSpace(_settings.DeafenHotkey)) return false;
+            if (_expectedDeafen.HasValue && DateTime.UtcNow <= _expectedDeafenUntil)
+            {
+                _log.Write($"Discord deafen hotkey suppressed: command for {_expectedDeafen.Value} is still pending");
+                return _expectedDeafen == target;
+            }
             _expectedDeafen = target;
-            _expectedDeafenUntil = DateTime.UtcNow.AddSeconds(2);
+            _expectedDeafenUntil = DateTime.UtcNow.AddSeconds(4);
             if (NativeKeyboard.SendHotkey(_settings.DeafenHotkey))
             {
                 _log.Write($"Discord deafen hotkey sent: {_settings.DeafenHotkey}");

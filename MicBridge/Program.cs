@@ -10,6 +10,12 @@ internal static class Program
         if (args.Contains("--self-test", StringComparer.OrdinalIgnoreCase))
             return RunSelfTests();
         ApplicationConfiguration.Initialize();
+        using var singleInstance = new Mutex(true, @"Local\MicBridge.SingleInstance", out bool isFirstInstance);
+        if (!isFirstInstance)
+        {
+            MessageBox.Show("Mic Bridge is already running.", "Mic Bridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return 3;
+        }
         var store = new SettingsStore();
         var settings = store.Load();
         int diagnosticIndex = Array.FindIndex(args, value => value.Equals("--diagnostic", StringComparison.OrdinalIgnoreCase));
