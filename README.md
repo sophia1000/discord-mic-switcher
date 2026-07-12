@@ -13,10 +13,9 @@ Discord state is read through native Windows UI Automation UIA3—the same
 accessibility information exposed to screen readers. No Discord token or
 privileged Discord API is used.
 
-Discord is controlled through configurable global keybinds sent with the
-Windows `SendInput` API. The red record button beside either keybind captures a
-global chord. It waits five seconds after the first key for additional keys and
-cancels after 30 seconds without input.
+Discord is controlled through the same Windows accessibility toggle controls
+used to read its state. Commands are verified against the resulting Discord
+state and retried when Discord is temporarily rebuilding its interface.
 
 ## Bridges
 

@@ -23,8 +23,6 @@ public sealed class AppSettings
     [JsonPropertyName("sync_mode")] public SyncMode MuteMode { get; set; } = SyncMode.Dynamic;
     [JsonPropertyName("deafen_sync_enabled")] public bool DeafenEnabled { get; set; }
     [JsonPropertyName("deafen_sync_mode")] public SyncMode DeafenMode { get; set; } = SyncMode.Dynamic;
-    [JsonPropertyName("discord_mute_hotkey")] public string MuteHotkey { get; set; } = "ctrl+shift+f12";
-    [JsonPropertyName("discord_deafen_hotkey")] public string DeafenHotkey { get; set; } = "ctrl+shift+alt+f12";
     [JsonPropertyName("discord_poll_interval_ms")] public int DiscordPollMs { get; set; } = 100;
     [JsonPropertyName("discord_rescan_every_s")] public double DiscordRescanSeconds { get; set; } = 6;
     [JsonPropertyName("discord_mute_names")] public string[] DiscordMuteNames { get; set; } = ["Mute", "Unmute"];
@@ -105,8 +103,6 @@ public sealed class SettingsStore
         s.VrchatIp = string.IsNullOrWhiteSpace(s.VrchatIp) ? "127.0.0.1" : s.VrchatIp.Trim();
         s.DiscordMuteNames ??= ["Mute", "Unmute"];
         s.DiscordDeafenNames ??= ["Deafen", "Undeafen"];
-        s.MuteHotkey ??= "";
-        s.DeafenHotkey ??= "";
         s.MuteParameter ??= "MuteSelf";
         s.ToggleParameter ??= "";
         s.DeafenParameter ??= "";

@@ -18,8 +18,6 @@ public sealed class MainForm : Form
     private readonly SettingsStore _store;
     private readonly System.Windows.Forms.Timer _saveTimer = new() { Interval = 500 };
     private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 150 };
-    private readonly System.Windows.Forms.Timer _recordFinishTimer = new() { Interval = 5000 };
-    private readonly System.Windows.Forms.Timer _recordTimeoutTimer = new() { Interval = 30000 };
     private bool _loading = true;
 
     private readonly Label _discordState = NewLabel("WAITING", 22, true);
@@ -34,8 +32,6 @@ public sealed class MainForm : Form
     private readonly CheckBox _deafenEnabled = NewCheck("ENABLE DEAFEN PARAMETER BRIDGE");
     private readonly Dictionary<SyncMode, RadioButton> _muteModes = [];
     private readonly Dictionary<SyncMode, RadioButton> _deafenModes = [];
-    private readonly TextBox _muteHotkey = NewTextBox();
-    private readonly TextBox _deafenHotkey = NewTextBox();
     private readonly TextBox _muteParameter = NewTextBox();
     private readonly TextBox _toggleParameter = NewTextBox();
     private readonly TextBox _deafenParameter = NewTextBox();
@@ -44,11 +40,6 @@ public sealed class MainForm : Form
     private readonly NumericUpDown _sendPort = NewPort();
     private readonly NumericUpDown _receivePort = NewPort();
     private readonly CheckBox _logging = NewCheck("Write diagnostic log");
-
-    private GlobalKeyboardRecorder? _recorder;
-    private TextBox? _recordTarget;
-    private Button? _recordButton;
-    private readonly List<string> _recordedKeys = [];
 
     public MainForm(SyncCoordinator coordinator, AppSettings settings, SettingsStore store)
     {
@@ -128,26 +119,24 @@ public sealed class MainForm : Form
     private TabPage BuildSettingsPage()
     {
         var page = NewPage("Settings");
-        var grid = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, BackColor = Bg, Padding = new Padding(20), ColumnCount = 2, RowCount = 6 };
+        var grid = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, BackColor = Bg, Padding = new Padding(20), ColumnCount = 2, RowCount = 5 };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
-        AddSetting(grid, 0, 0, "Discord mute keybind", KeybindEditor(_muteHotkey));
-        AddSetting(grid, 1, 0, "Discord deafen keybind", KeybindEditor(_deafenHotkey));
         _oscMode.Items.AddRange(["OSCQuery (automatic)", "Manual IP and ports"]);
-        AddSetting(grid, 0, 1, "VRChat connection", _oscMode);
-        AddSetting(grid, 1, 1, "Manual VRChat IP", _vrchatIp);
-        AddSetting(grid, 0, 2, "Manual OSC send port", _sendPort);
-        AddSetting(grid, 1, 2, "Manual OSC receive port", _receivePort);
-        AddSetting(grid, 0, 3, "VRChat mute parameter", _muteParameter);
-        AddSetting(grid, 1, 3, "VRChat sync toggle parameter", _toggleParameter);
-        AddSetting(grid, 0, 4, "VRChat deafen boolean parameter", _deafenParameter);
+        AddSetting(grid, 0, 0, "VRChat connection", _oscMode);
+        AddSetting(grid, 1, 0, "Manual VRChat IP", _vrchatIp);
+        AddSetting(grid, 0, 1, "Manual OSC send port", _sendPort);
+        AddSetting(grid, 1, 1, "Manual OSC receive port", _receivePort);
+        AddSetting(grid, 0, 2, "VRChat mute parameter", _muteParameter);
+        AddSetting(grid, 1, 2, "VRChat sync toggle parameter", _toggleParameter);
+        AddSetting(grid, 0, 3, "VRChat deafen boolean parameter", _deafenParameter);
         var path = NewLabel("Settings: " + _store.SettingsPath, 8); path.AutoSize = true; path.Padding = new Padding(0, 12, 0, 0);
-        grid.Controls.Add(path, 1, 4);
+        grid.Controls.Add(path, 1, 3);
         _logging.AutoSize = true; _logging.ForeColor = TextColor; _logging.Padding = new Padding(0, 12, 0, 0);
-        grid.Controls.Add(_logging, 0, 5);
+        grid.Controls.Add(_logging, 0, 4);
         var auto = NewLabel("All changes save automatically. OSCQuery is recommended.", 9); auto.AutoSize = true; auto.ForeColor = Cyan; auto.Padding = new Padding(0, 12, 0, 0);
-        grid.Controls.Add(auto, 1, 5);
+        grid.Controls.Add(auto, 1, 4);
         page.Controls.Add(grid);
         return page;
     }
@@ -182,19 +171,6 @@ public sealed class MainForm : Form
         return panel;
     }
 
-    private Control KeybindEditor(TextBox target)
-    {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Top, Height = 38, ColumnCount = 2, BackColor = Bg };
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        var record = new Button { Text = "●", Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, BackColor = Panel2, ForeColor = Red, Font = new Font("Segoe UI Symbol", 14, FontStyle.Bold), Cursor = Cursors.Hand, AccessibleName = "Record keybind" };
-        record.FlatAppearance.BorderSize = 0;
-        record.Click += (_, _) => StartRecording(target, record);
-        target.Dock = DockStyle.Fill;
-        panel.Controls.Add(record, 0, 0); panel.Controls.Add(target, 1, 0);
-        return panel;
-    }
-
     private static void AddSetting(TableLayoutPanel grid, int column, int row, string caption, Control editor)
     {
         var box = new Panel { Dock = DockStyle.Fill, Height = 82, BackColor = Bg, Padding = new Padding(5) };
@@ -209,7 +185,7 @@ public sealed class MainForm : Form
         _deafenEnabled.CheckedChanged += (_, _) => { if (!_loading) { _settings.DeafenEnabled = _deafenEnabled.Checked; SaveSoon(); } };
         foreach (var (mode, radio) in _muteModes) radio.CheckedChanged += (_, _) => { if (!_loading && radio.Checked) { _settings.MuteMode = mode; StyleModes(); SaveSoon(); } };
         foreach (var (mode, radio) in _deafenModes) radio.CheckedChanged += (_, _) => { if (!_loading && radio.Checked) { _settings.DeafenMode = mode; StyleModes(); SaveSoon(); } };
-        foreach (var text in new[] { _muteHotkey, _deafenHotkey, _muteParameter, _toggleParameter, _deafenParameter, _vrchatIp }) text.TextChanged += (_, _) => { if (!_loading) SaveSoon(); };
+        foreach (var text in new[] { _muteParameter, _toggleParameter, _deafenParameter, _vrchatIp }) text.TextChanged += (_, _) => { if (!_loading) SaveSoon(); };
         _oscMode.SelectedIndexChanged += (_, _) =>
         {
             if (_loading) return;
@@ -222,10 +198,7 @@ public sealed class MainForm : Form
         _logging.CheckedChanged += (_, _) => { if (!_loading) SaveSoon(); };
         _saveTimer.Tick += (_, _) => SaveNow();
         _refreshTimer.Tick += (_, _) => RefreshStatus();
-        _recordFinishTimer.Tick += (_, _) => FinishRecording(true, "Keybind recorded and saved");
-        _recordTimeoutTimer.Tick += (_, _) => FinishRecording(false, "Key recording timed out");
         _coordinator.Updated += CoordinatorUpdated;
-        FormClosed += (_, _) => FinishRecording(false, "");
     }
 
     private void LoadSettingsIntoControls()
@@ -234,8 +207,6 @@ public sealed class MainForm : Form
         _deafenEnabled.Checked = _settings.DeafenEnabled;
         _muteModes[_settings.MuteMode].Checked = true;
         _deafenModes[_settings.DeafenMode].Checked = true;
-        _muteHotkey.Text = _settings.MuteHotkey;
-        _deafenHotkey.Text = _settings.DeafenHotkey;
         _muteParameter.Text = _settings.MuteParameter;
         _toggleParameter.Text = _settings.ToggleParameter;
         _deafenParameter.Text = _settings.DeafenParameter;
@@ -257,8 +228,6 @@ public sealed class MainForm : Form
     private void SaveNow()
     {
         _saveTimer.Stop();
-        _settings.MuteHotkey = _muteHotkey.Text.Trim();
-        _settings.DeafenHotkey = _deafenHotkey.Text.Trim();
         _settings.MuteParameter = _muteParameter.Text.Trim();
         _settings.ToggleParameter = _toggleParameter.Text.Trim();
         _settings.DeafenParameter = _deafenParameter.Text.Trim();
@@ -268,52 +237,6 @@ public sealed class MainForm : Form
         _settings.OscReceivePort = (int)_receivePort.Value;
         _settings.LoggingEnabled = _logging.Checked;
         _coordinator.SettingsChanged();
-    }
-
-    private void StartRecording(TextBox target, Button button)
-    {
-        if (_recordTarget == target) { FinishRecording(false, "Key recording cancelled"); return; }
-        FinishRecording(false, "");
-        try
-        {
-            _recordTarget = target; _recordButton = button; _recordedKeys.Clear();
-            _coordinator.Discord.CommandsSuspended = true;
-            button.Text = "◉"; button.BackColor = Red; button.ForeColor = Color.White;
-            _recorder = new GlobalKeyboardRecorder();
-            _recorder.KeyPressed += RecorderKeyPressed;
-            _recordTimeoutTimer.Start();
-            _coordinator.SetStatus("Recording keybind — press a key (30 second timeout)");
-        }
-        catch (Exception ex) { FinishRecording(false, "Could not record keys: " + ex.Message); }
-    }
-
-    private void RecorderKeyPressed(Keys key)
-    {
-        if (IsDisposed) return;
-        BeginInvoke(() =>
-        {
-            string name = NativeKeyboard.DisplayName(key);
-            if (_recordTarget is null || _recordedKeys.Contains(name)) return;
-            _recordedKeys.Add(name);
-            if (!_recordFinishTimer.Enabled)
-            {
-                _recordFinishTimer.Start();
-                _coordinator.SetStatus("First key recorded — adding keys for 5 seconds…");
-            }
-        });
-    }
-
-    private void FinishRecording(bool save, string message)
-    {
-        _recordFinishTimer.Stop(); _recordTimeoutTimer.Stop();
-        if (_recorder is not null) { _recorder.KeyPressed -= RecorderKeyPressed; _recorder.Dispose(); _recorder = null; }
-        if (_recordButton is not null) { _recordButton.Text = "●"; _recordButton.BackColor = Panel2; _recordButton.ForeColor = Red; }
-        var target = _recordTarget;
-        _recordTarget = null; _recordButton = null;
-        _coordinator.Discord.CommandsSuspended = false;
-        if (save && target is not null && _recordedKeys.Count > 0) { target.Text = string.Join('+', _recordedKeys); SaveNow(); }
-        _recordedKeys.Clear();
-        if (!string.IsNullOrEmpty(message)) _coordinator.SetStatus(message);
     }
 
     private void CoordinatorUpdated()

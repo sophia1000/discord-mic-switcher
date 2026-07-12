@@ -38,8 +38,6 @@ internal static class Program
     {
         try
         {
-            if (NativeKeyboard.Parse("ctrl+shift+f12").Count != 3) return 10;
-            if (NativeKeyboard.InputStructureSize != 40) return 15;
             foreach (bool value in new[] { false, true })
             {
                 byte[] packet = OscBridge.Build("/avatar/parameters/Test", value);

@@ -23,11 +23,12 @@ public sealed class DiscordMonitor : IDisposable
     private bool? _muted, _deafened;
     private bool? _expectedMute, _expectedDeafen;
     private DateTime _expectedMuteUntil, _expectedDeafenUntil;
+    private DateTime _nextMuteCommandAt, _nextDeafenCommandAt;
+    private int _muteCommandAttempts, _deafenCommandAttempts;
 
     public event Action<BridgeSignal>? Signal;
     public event Action? StatusChanged;
     public bool Ready { get; private set; }
-    public bool CommandsSuspended { get; set; }
     public bool? Muted { get { lock (_gate) return _muted; } }
     public bool? Deafened { get { lock (_gate) return _deafened; } }
 
@@ -55,6 +56,7 @@ public sealed class DiscordMonitor : IDisposable
                 bool ready = mute.HasValue && deafen.HasValue;
                 if (ready != Ready) { Ready = ready; StatusChanged?.Invoke(); }
                 Accept(_muteStreak >= 3 ? _rawMute : null, _deafenStreak >= 3 ? _rawDeafen : null);
+                RetryPendingCommands();
             }
             catch (Exception ex)
             {
@@ -151,6 +153,7 @@ public sealed class DiscordMonitor : IDisposable
                 _deafened = deafen;
                 bool expected = _expectedDeafen == deafen && DateTime.UtcNow <= _expectedDeafenUntil;
                 _expectedDeafen = null;
+                _deafenCommandAttempts = 0;
                 events.Add(new(SignalKind.DiscordDeafen, deafen.Value, initial, expected));
             }
             if (mute.HasValue && mute != _muted)
@@ -159,6 +162,7 @@ public sealed class DiscordMonitor : IDisposable
                 _muted = mute;
                 bool expected = _expectedMute == mute && DateTime.UtcNow <= _expectedMuteUntil;
                 _expectedMute = null;
+                _muteCommandAttempts = 0;
                 events.Add(new(SignalKind.DiscordMute, mute.Value, initial, expected));
             }
         }
@@ -172,64 +176,101 @@ public sealed class DiscordMonitor : IDisposable
 
     public bool SetMute(bool target)
     {
+        AutomationElement? button;
         lock (_gate)
         {
-            if (CommandsSuspended || !Ready || !_muted.HasValue || _muted == target || string.IsNullOrWhiteSpace(_settings.MuteHotkey)) return false;
+            if (!Ready || !_muted.HasValue || _muted == target) return false;
             if (_expectedMute.HasValue && DateTime.UtcNow <= _expectedMuteUntil)
             {
-                _log.Write($"Discord mute hotkey suppressed: command for {_expectedMute.Value} is still pending");
+                _log.Write($"Discord mute command suppressed: command for {_expectedMute.Value} is still pending");
                 return _expectedMute == target;
             }
             _expectedMute = target;
-            _expectedMuteUntil = DateTime.UtcNow.AddSeconds(4);
-            if (TryToggleButton(_muteButton, "mute")) return true;
-            if (NativeKeyboard.SendHotkey(_settings.MuteHotkey))
-            {
-                _log.Write($"Discord mute hotkey sent: {_settings.MuteHotkey}");
-                return true;
-            }
-            _log.Write($"Discord mute hotkey failed: Windows error {NativeKeyboard.LastSendError}");
-            _expectedMute = null;
-            return false;
+            _expectedMuteUntil = DateTime.UtcNow.AddSeconds(10);
+            button = _muteButton;
+            _muteCommandAttempts = button is null ? 0 : 1;
+            _nextMuteCommandAt = DateTime.UtcNow.AddMilliseconds(button is null ? 100 : 1400);
         }
+        if (button is not null && TryToggleButton(button, "mute", 1)) return true;
+        _log.Write("Discord mute command queued until its accessibility button is ready");
+        return true;
     }
 
     public bool SetDeafen(bool target)
     {
+        AutomationElement? button;
         lock (_gate)
         {
-            if (CommandsSuspended || !Ready || !_deafened.HasValue || _deafened == target || string.IsNullOrWhiteSpace(_settings.DeafenHotkey)) return false;
+            if (!Ready || !_deafened.HasValue || _deafened == target) return false;
             if (_expectedDeafen.HasValue && DateTime.UtcNow <= _expectedDeafenUntil)
             {
-                _log.Write($"Discord deafen hotkey suppressed: command for {_expectedDeafen.Value} is still pending");
+                _log.Write($"Discord deafen command suppressed: command for {_expectedDeafen.Value} is still pending");
                 return _expectedDeafen == target;
             }
             _expectedDeafen = target;
-            _expectedDeafenUntil = DateTime.UtcNow.AddSeconds(4);
-            if (TryToggleButton(_deafenButton, "deafen")) return true;
-            if (NativeKeyboard.SendHotkey(_settings.DeafenHotkey))
-            {
-                _log.Write($"Discord deafen hotkey sent: {_settings.DeafenHotkey}");
-                return true;
-            }
-            _log.Write($"Discord deafen hotkey failed: Windows error {NativeKeyboard.LastSendError}");
-            _expectedDeafen = null;
-            return false;
+            _expectedDeafenUntil = DateTime.UtcNow.AddSeconds(10);
+            button = _deafenButton;
+            _deafenCommandAttempts = button is null ? 0 : 1;
+            _nextDeafenCommandAt = DateTime.UtcNow.AddMilliseconds(button is null ? 100 : 1400);
         }
+        if (button is not null && TryToggleButton(button, "deafen", 1)) return true;
+        _log.Write("Discord deafen command queued until its accessibility button is ready");
+        return true;
     }
 
-    private bool TryToggleButton(AutomationElement? button, string command)
+    private void RetryPendingCommands()
+    {
+        AutomationElement? muteButton = null, deafenButton = null;
+        int muteAttempt = 0, deafenAttempt = 0;
+        DateTime now = DateTime.UtcNow;
+        lock (_gate)
+        {
+            if (_expectedMute.HasValue)
+            {
+                if (now > _expectedMuteUntil || _muteCommandAttempts >= 4)
+                {
+                    _log.Write($"Discord mute command failed after {_muteCommandAttempts} accessibility attempts");
+                    _expectedMute = null;
+                }
+                else if (now >= _nextMuteCommandAt && _muteButton is not null)
+                {
+                    muteButton = _muteButton;
+                    muteAttempt = ++_muteCommandAttempts;
+                    _nextMuteCommandAt = now.AddMilliseconds(1400);
+                }
+            }
+            if (_expectedDeafen.HasValue)
+            {
+                if (now > _expectedDeafenUntil || _deafenCommandAttempts >= 4)
+                {
+                    _log.Write($"Discord deafen command failed after {_deafenCommandAttempts} accessibility attempts");
+                    _expectedDeafen = null;
+                }
+                else if (now >= _nextDeafenCommandAt && _deafenButton is not null)
+                {
+                    deafenButton = _deafenButton;
+                    deafenAttempt = ++_deafenCommandAttempts;
+                    _nextDeafenCommandAt = now.AddMilliseconds(1400);
+                }
+            }
+        }
+        if (muteButton is not null) TryToggleButton(muteButton, "mute", muteAttempt);
+        if (deafenButton is not null) TryToggleButton(deafenButton, "deafen", deafenAttempt);
+    }
+
+    private bool TryToggleButton(AutomationElement button, string command, int attempt)
     {
         try
         {
-            if (button is null || !button.Patterns.Toggle.IsSupported) return false;
+            if (!button.Patterns.Toggle.IsSupported) return false;
             button.Patterns.Toggle.Pattern.Toggle();
-            _log.Write($"Discord {command} toggled through accessibility control");
+            _log.Write($"Discord {command} toggled through accessibility control (attempt {attempt})");
             return true;
         }
         catch (Exception ex)
         {
-            _log.Write($"Discord {command} accessibility toggle failed; trying hotkey: {ex.Message}");
+            _log.Write($"Discord {command} accessibility toggle attempt {attempt} failed: {ex.Message}");
+            _scannedAt = DateTime.MinValue;
             return false;
         }
     }
