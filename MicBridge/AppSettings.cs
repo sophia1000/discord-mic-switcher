@@ -33,6 +33,7 @@ public sealed class AppSettings
     [JsonPropertyName("vrchat_osc_ip")] public string VrchatIp { get; set; } = "127.0.0.1";
     [JsonPropertyName("vrchat_osc_send_port")] public int OscSendPort { get; set; } = 9000;
     [JsonPropertyName("vrchat_osc_receive_port")] public int OscReceivePort { get; set; } = 9123;
+    [JsonPropertyName("vrchat_voice_press_ms")] public int VrchatVoicePressMs { get; set; } = 80;
     [JsonPropertyName("mute_parameter_name")] public string MuteParameter { get; set; } = "MuteSelf";
     [JsonPropertyName("toggle_parameter_name")] public string ToggleParameter { get; set; } = "ToggleMicSync";
     [JsonPropertyName("deafen_parameter_name")] public string DeafenParameter { get; set; } = "discorddeafen";
@@ -100,6 +101,7 @@ public sealed class SettingsStore
         s.DiscordPollMs = Math.Clamp(s.DiscordPollMs, 50, 5000);
         s.OscSendPort = Math.Clamp(s.OscSendPort, 1, 65535);
         s.OscReceivePort = Math.Clamp(s.OscReceivePort, 1, 65535);
+        s.VrchatVoicePressMs = Math.Clamp(s.VrchatVoicePressMs, 20, 1000);
         s.VrchatIp = string.IsNullOrWhiteSpace(s.VrchatIp) ? "127.0.0.1" : s.VrchatIp.Trim();
         s.DiscordMuteNames ??= ["Mute", "Unmute"];
         s.DiscordDeafenNames ??= ["Deafen", "Undeafen"];

@@ -257,7 +257,9 @@ public sealed class OscBridge : IDisposable
         lock (_gate)
         {
             if (!Connected || !MuteFound || _mute == target) return false;
-            if (!SendParameter(_settings.MuteParameter, target)) return false;
+            // MuteSelf is an outgoing state value, not a writable mic command.
+            // VRChat's reliable mic control is an /input/Voice press and release.
+            if (!SendVoiceToggle()) return false;
             _mute = target;
             _expectedMute = target;
             _expectedMuteUntil = DateTime.UtcNow.AddSeconds(1.5);
@@ -297,6 +299,32 @@ public sealed class OscBridge : IDisposable
         catch (Exception ex) { _log.Write("OSC send failed: " + ex.Message); return false; }
     }
 
+    private bool SendVoiceToggle()
+    {
+        try
+        {
+            if (_sender is null || _sendAddress is null || _sendPort <= 0)
+            {
+                _log.Write("VRChat voice toggle skipped: waiting for VRChat OSCQuery discovery");
+                return false;
+            }
+
+            var endpoint = new IPEndPoint(_sendAddress, _sendPort);
+            byte[] pressed = BuildInt("/input/Voice", 1);
+            _sender.Send(pressed, pressed.Length, endpoint);
+            Thread.Sleep(Math.Clamp(_settings.VrchatVoicePressMs, 20, 1000));
+            byte[] released = BuildInt("/input/Voice", 0);
+            _sender.Send(released, released.Length, endpoint);
+            _log.Write($"VRChat /input/Voice pulse sent ({_settings.VrchatVoicePressMs}ms)");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log.Write("VRChat /input/Voice toggle failed: " + ex.Message);
+            return false;
+        }
+    }
+
     internal static byte[] Build(string address, bool value)
     {
         using var stream = new MemoryStream();
@@ -304,6 +332,17 @@ public sealed class OscBridge : IDisposable
         WriteString(stream, ",f");
         Span<byte> bytes = stackalloc byte[4];
         BinaryPrimitives.WriteInt32BigEndian(bytes, BitConverter.SingleToInt32Bits(value ? 1f : 0f));
+        stream.Write(bytes);
+        return stream.ToArray();
+    }
+
+    internal static byte[] BuildInt(string address, int value)
+    {
+        using var stream = new MemoryStream();
+        WriteString(stream, address);
+        WriteString(stream, ",i");
+        Span<byte> bytes = stackalloc byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(bytes, value);
         stream.Write(bytes);
         return stream.ToArray();
     }

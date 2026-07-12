@@ -177,7 +177,12 @@ public sealed class DiscordMonitor : IDisposable
             if (CommandsSuspended || !Ready || !_muted.HasValue || _muted == target || string.IsNullOrWhiteSpace(_settings.MuteHotkey)) return false;
             _expectedMute = target;
             _expectedMuteUntil = DateTime.UtcNow.AddSeconds(2);
-            if (NativeKeyboard.SendHotkey(_settings.MuteHotkey)) return true;
+            if (NativeKeyboard.SendHotkey(_settings.MuteHotkey))
+            {
+                _log.Write($"Discord mute hotkey sent: {_settings.MuteHotkey}");
+                return true;
+            }
+            _log.Write($"Discord mute hotkey failed: Windows error {NativeKeyboard.LastSendError}");
             _expectedMute = null;
             return false;
         }
@@ -190,7 +195,12 @@ public sealed class DiscordMonitor : IDisposable
             if (CommandsSuspended || !Ready || !_deafened.HasValue || _deafened == target || string.IsNullOrWhiteSpace(_settings.DeafenHotkey)) return false;
             _expectedDeafen = target;
             _expectedDeafenUntil = DateTime.UtcNow.AddSeconds(2);
-            if (NativeKeyboard.SendHotkey(_settings.DeafenHotkey)) return true;
+            if (NativeKeyboard.SendHotkey(_settings.DeafenHotkey))
+            {
+                _log.Write($"Discord deafen hotkey sent: {_settings.DeafenHotkey}");
+                return true;
+            }
+            _log.Write($"Discord deafen hotkey failed: Windows error {NativeKeyboard.LastSendError}");
             _expectedDeafen = null;
             return false;
         }

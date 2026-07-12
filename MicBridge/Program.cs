@@ -33,11 +33,18 @@ internal static class Program
         try
         {
             if (NativeKeyboard.Parse("ctrl+shift+f12").Count != 3) return 10;
+            if (NativeKeyboard.InputStructureSize != 40) return 15;
             foreach (bool value in new[] { false, true })
             {
                 byte[] packet = OscBridge.Build("/avatar/parameters/Test", value);
                 if (!OscBridge.TryParse(packet, out string address, out bool parsed)
                     || address != "/avatar/parameters/Test" || parsed != value) return 11;
+            }
+            foreach (int value in new[] { 0, 1 })
+            {
+                byte[] packet = OscBridge.BuildInt("/input/Voice", value);
+                if (!OscBridge.TryParse(packet, out string address, out bool parsed)
+                    || address != "/input/Voice" || parsed != (value != 0)) return 16;
             }
             var oscSettings = new AppSettings { OscConnectionMode = OscConnectionMode.OscQuery, LoggingEnabled = false };
             var store = new SettingsStore();

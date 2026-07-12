@@ -97,15 +97,18 @@ public sealed class SyncCoordinator : IDisposable
 
     private void SetDiscordMute(bool target, string reason)
     {
+        bool alreadyCorrect = Discord.Muted == target;
         bool sent = Discord.SetMute(target);
-        LastAction = Discord.Ready ? $"{reason} → Discord {(target ? "muted" : "live")}{(sent ? "" : " (already correct)")}" : "Waiting for Discord accessibility state";
+        LastAction = !Discord.Ready ? "Waiting for Discord accessibility state"
+            : $"{reason} → Discord {(target ? "muted" : "live")}{(sent ? "" : alreadyCorrect ? " (already correct)" : " (command failed)")}";
         _log.Write(LastAction);
     }
 
     private void SetVrchatMute(bool target, string reason)
     {
+        bool alreadyCorrect = Vrchat.Muted == target;
         bool sent = Vrchat.SetMute(target);
-        LastAction = $"{reason} → VRChat {(target ? "muted" : "live")}{(sent ? "" : " (already correct)")}";
+        LastAction = $"{reason} → VRChat {(target ? "muted" : "live")}{(sent ? "" : alreadyCorrect ? " (already correct)" : " (command failed)")}";
         _log.Write(LastAction);
     }
 

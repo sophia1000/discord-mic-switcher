@@ -41,7 +41,9 @@ internal static class NativeKeyboard
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Input { public uint Type; public InputUnion Data; }
-    [StructLayout(LayoutKind.Explicit)]
+    // INPUT's union is 32 bytes on x64 because MOUSEINPUT is larger than
+    // KEYBDINPUT. SendInput rejects the structure if cbSize is not exactly 40.
+    [StructLayout(LayoutKind.Explicit, Size = 32)]
     private struct InputUnion { [FieldOffset(0)] public KeyboardInput Keyboard; }
     [StructLayout(LayoutKind.Sequential)]
     private struct KeyboardInput
@@ -56,14 +58,19 @@ internal static class NativeKeyboard
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint count, Input[] inputs, int size);
 
+    public static int LastSendError { get; private set; }
+    internal static int InputStructureSize => Marshal.SizeOf<Input>();
+
     public static bool SendHotkey(string text)
     {
         var keys = Parse(text);
-        if (keys.Count == 0) return false;
+        if (keys.Count == 0) { LastSendError = 87; return false; }
         var inputs = new List<Input>(keys.Count * 2);
         foreach (ushort key in keys) inputs.Add(Make(key, false));
         for (int i = keys.Count - 1; i >= 0; i--) inputs.Add(Make(keys[i], true));
-        return SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<Input>()) == inputs.Count;
+        uint sent = SendInput((uint)inputs.Count, inputs.ToArray(), InputStructureSize);
+        LastSendError = sent == inputs.Count ? 0 : Marshal.GetLastWin32Error();
+        return sent == inputs.Count;
     }
 
     private static Input Make(ushort key, bool up) => new()
