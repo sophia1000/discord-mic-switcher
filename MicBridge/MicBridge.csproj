@@ -7,6 +7,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>MicBridge</AssemblyName>
     <RootNamespace>MicBridge</RootNamespace>
+    <AssemblyTitle>Sophia's Mic Bridge</AssemblyTitle>
+    <Product>Sophia's Mic Bridge</Product>
+    <Description>Keeps Discord and VRChat microphone states synchronized.</Description>
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>

@@ -103,6 +103,13 @@ public sealed class DiscordMonitor : IDisposable
     {
         if (_root is null || _hwnd == 0 || !NativeWindows.IsWindow(_hwnd)) Attach();
         if (_root is null || _hwnd == 0 || NativeWindows.IsHungAppWindow(_hwnd)) return (null, null);
+        if (NativeWindows.RestoreDiscordBehindOtherWindows(_hwnd))
+        {
+            _log.Write("Discord was minimized; restored without activation and moved behind other windows");
+            InvalidateRoot();
+            _stop.Token.WaitHandle.WaitOne(250);
+            return (null, null);
+        }
 
         AutomationElement? muteButton, deafenButton;
         lock (_gate) { muteButton = _muteButton; deafenButton = _deafenButton; }

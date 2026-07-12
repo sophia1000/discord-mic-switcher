@@ -13,7 +13,7 @@ internal static class Program
         using var singleInstance = new Mutex(true, @"Local\MicBridge.SingleInstance", out bool isFirstInstance);
         if (!isFirstInstance)
         {
-            MessageBox.Show("Mic Bridge is already running.", "Mic Bridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("Sophia's Mic Bridge is already running.", "Sophia's Mic Bridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 3;
         }
         var store = new SettingsStore();

@@ -48,7 +48,7 @@ public sealed class MainForm : Form
         _coordinator = coordinator;
         _settings = settings;
         _store = store;
-        Text = "Mic Bridge";
+        Text = "Sophia's Mic Bridge";
         ClientSize = new Size(900, 780);
         MinimumSize = new Size(800, 720);
         BackColor = Bg;
@@ -79,8 +79,9 @@ public sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
 
         var header = new Panel { Dock = DockStyle.Fill, BackColor = Bg };
-        var title = NewLabel("MIC BRIDGE", 24, true); title.AutoSize = true; title.Location = new Point(0, 3);
+        var title = NewLabel("SOPHIA'S MIC BRIDGE", 24, true); title.AutoSize = true; title.Location = new Point(0, 3);
         var sub = NewLabel("Discord  ↔  VRChat", 10); sub.AutoSize = true; sub.Location = new Point(205, 18);
+        sub.Left = title.Right + 16;
         sub.ForeColor = Cyan;
         header.Controls.AddRange([title, sub]);
         root.Controls.Add(header, 0, 0);

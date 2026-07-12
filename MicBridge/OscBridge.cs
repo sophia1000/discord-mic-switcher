@@ -102,7 +102,7 @@ public sealed class OscBridge : IDisposable
 
         var discovery = new MeaModDiscovery();
         _oscQuery = new OSCQueryServiceBuilder()
-            .WithServiceName("MicBridge")
+            .WithServiceName("Sophia's Mic Bridge")
             .WithTcpPort(_queryPort)
             .WithUdpPort(_receivePort)
             .WithHostIP(IPAddress.Loopback)

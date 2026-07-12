@@ -1,6 +1,6 @@
-# Mic Bridge — Native Windows Edition
+# Sophia's Mic Bridge — Native Windows Edition
 
-Mic Bridge is now a native C# Windows application. It does not require Python,
+Sophia's Mic Bridge is a native C# Windows application. It does not require Python,
 the .NET runtime, or separate dependency files.
 
 Run the application with `launch.bat`, or directly open:
