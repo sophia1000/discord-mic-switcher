@@ -1,0 +1,1 @@
+pythonw vrchat_mic_osc.py

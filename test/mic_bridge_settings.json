@@ -1,0 +1,46 @@
+{
+  "system_enabled": false,
+  "enforce_interval_ms": 100,
+  "ignore_own_change_ms": 2000,
+  "discord_command_cooldown_ms": 2000,
+  "vrc_command_cooldown_ms": 1000,
+  "discord_verify_delay_ms": 1000,
+  "vrc_verify_delay_ms": 500,
+  "global_action_lock_ms": 1000,
+  "max_attempts_per_sync": 1,
+  "process_check_interval_ms": 900,
+  "discord_process_names": [
+    "discord.exe"
+  ],
+  "vrchat_process_names": [
+    "vrchat.exe",
+    "vrchat"
+  ],
+  "discord_poll_interval_ms": 100,
+  "discord_mute_hotkey": "ctrl+shift+f12",
+  "discord_deafen_hotkey": "ctrl+shift+alt+f12",
+  "discord_mute_names": [
+    "Mute",
+    "Unmute"
+  ],
+  "discord_deafen_names": [
+    "Deafen",
+    "Undeafen"
+  ],
+  "discord_rescan_every_s": 6.0,
+  "discord_max_buttons_scan": 12000,
+  "vrc_send_host": "127.0.0.1",
+  "vrc_send_port": 9000,
+  "vrc_listen_host": "127.0.0.1",
+  "vrc_listen_port": 0,
+  "oscquery_http_port": 0,
+  "oscquery_service_name": "MicBridge",
+  "vrc_mute_param": "MuteSelf",
+  "vrc_toggle_param": "discordtoggle",
+  "vrc_toggle_param_aliases": [],
+  "vrc_deafen_param": "discorddeafen",
+  "vrc_deafen_param_aliases": [],
+  "vrc_press_ms": 80,
+  "vrc_extra_release": false,
+  "vrc_extra_release_ms": 120
+}

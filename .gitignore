@@ -1,0 +1,22 @@
+# .NET build output
+MicBridge/bin/
+MicBridge/obj/
+
+# Published executable and local diagnostics
+dist/
+*.log
+*.pid
+native-diagnostic.txt
+
+# Python reference caches
+__pycache__/
+*.py[cod]
+
+# Local settings and editor files
+mic_sync_config.json
+.vs/
+.vscode/
+.idea/
+
+# Temporary source/reference checkouts
+.tmp-*/
