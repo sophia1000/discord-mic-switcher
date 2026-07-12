@@ -4,12 +4,13 @@ namespace MicBridge;
 
 public sealed class MainForm : Form
 {
-    private static readonly Color Bg = Color.FromArgb(11, 16, 32);
-    private static readonly Color Panel = Color.FromArgb(21, 28, 47);
-    private static readonly Color Panel2 = Color.FromArgb(28, 37, 64);
-    private static readonly Color TextColor = Color.FromArgb(238, 242, 255);
-    private static readonly Color MutedColor = Color.FromArgb(154, 166, 195);
-    private static readonly Color Blue = Color.FromArgb(88, 101, 242);
+    private static readonly Color Bg = Color.FromArgb(8, 12, 18);
+    private static readonly Color Panel = Color.FromArgb(17, 24, 36);
+    private static readonly Color Panel2 = Color.FromArgb(27, 38, 55);
+    private static readonly Color Border = Color.FromArgb(43, 57, 78);
+    private static readonly Color TextColor = Color.FromArgb(248, 250, 252);
+    private static readonly Color MutedColor = Color.FromArgb(157, 171, 192);
+    private static readonly Color Blue = Color.FromArgb(99, 102, 241);
     private static readonly Color Cyan = Color.FromArgb(45, 212, 191);
     private static readonly Color Green = Color.FromArgb(34, 197, 94);
     private static readonly Color Red = Color.FromArgb(251, 113, 133);
@@ -48,8 +49,8 @@ public sealed class MainForm : Form
         _settings = settings;
         _store = store;
         Text = "Mic Bridge";
-        ClientSize = new Size(840, 760);
-        MinimumSize = new Size(780, 700);
+        ClientSize = new Size(900, 780);
+        MinimumSize = new Size(800, 720);
         BackColor = Bg;
         ForeColor = TextColor;
         Font = new Font("Segoe UI", 10);
@@ -63,36 +64,59 @@ public sealed class MainForm : Form
         _refreshTimer.Start();
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        NativeWindows.EnableDarkTitleBar(Handle);
+    }
+
     private Control BuildLayout()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Bg, Padding = new Padding(22), RowCount = 3 };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Bg, Padding = new Padding(26, 20, 26, 16), RowCount = 4 };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
 
         var header = new Panel { Dock = DockStyle.Fill, BackColor = Bg };
-        var title = NewLabel("MIC BRIDGE", 23, true); title.AutoSize = true; title.Location = new Point(0, 4);
-        var sub = NewLabel("Native Discord  ↔  VRChat", 10); sub.AutoSize = true; sub.Location = new Point(190, 16);
+        var title = NewLabel("MIC BRIDGE", 24, true); title.AutoSize = true; title.Location = new Point(0, 3);
+        var sub = NewLabel("Discord  ↔  VRChat", 10); sub.AutoSize = true; sub.Location = new Point(205, 18);
+        sub.ForeColor = Cyan;
         header.Controls.AddRange([title, sub]);
         root.Controls.Add(header, 0, 0);
 
-        var tabs = new TabControl { Dock = DockStyle.Fill, Appearance = TabAppearance.Normal, Padding = new Point(16, 7) };
-        tabs.TabPages.Add(BuildBridgePage());
-        tabs.TabPages.Add(BuildSettingsPage());
-        root.Controls.Add(tabs, 0, 1);
+        var navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, BackColor = Bg, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0), Margin = new Padding(0) };
+        var bridgeButton = NavigationButton("Bridge");
+        var settingsButton = NavigationButton("Settings");
+        navigation.Controls.AddRange([bridgeButton, settingsButton]);
+        root.Controls.Add(navigation, 0, 1);
 
+        var content = new Panel { Dock = DockStyle.Fill, BackColor = Bg, Margin = new Padding(0) };
+        var bridgePage = BuildBridgePage();
+        var settingsPage = BuildSettingsPage();
+        settingsPage.Visible = false;
+        content.Controls.Add(settingsPage);
+        content.Controls.Add(bridgePage);
+        SelectNavigation(bridgeButton, settingsButton);
+        bridgeButton.Click += (_, _) => { bridgePage.Visible = true; settingsPage.Visible = false; bridgePage.BringToFront(); SelectNavigation(bridgeButton, settingsButton); };
+        settingsButton.Click += (_, _) => { bridgePage.Visible = false; settingsPage.Visible = true; settingsPage.BringToFront(); SelectNavigation(settingsButton, bridgeButton); };
+        root.Controls.Add(content, 0, 2);
+
+        var footer = new Panel { Dock = DockStyle.Fill, BackColor = Bg, Padding = new Padding(2, 8, 0, 0) };
+        footer.Paint += (_, e) => { using var pen = new Pen(Border); e.Graphics.DrawLine(pen, 0, 0, footer.Width, 0); };
         _action.Dock = DockStyle.Fill; _action.TextAlign = ContentAlignment.MiddleLeft;
-        root.Controls.Add(_action, 0, 2);
+        footer.Controls.Add(_action);
+        root.Controls.Add(footer, 0, 3);
         return root;
     }
 
-    private TabPage BuildBridgePage()
+    private Control BuildBridgePage()
     {
-        var page = NewPage("Bridge");
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Bg, Padding = new Padding(12), RowCount = 4 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 175));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 205));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 205));
+        var page = NewPage();
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Bg, Padding = new Padding(0, 10, 0, 0), RowCount = 4 };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 178));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 198));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 198));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var status = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, BackColor = Bg };
@@ -101,16 +125,10 @@ public sealed class MainForm : Form
         status.Controls.Add(StatusCard("DISCORD", _discordState, _discordInfo, _discordDeafen), 0, 0);
         status.Controls.Add(StatusCard("VRCHAT", _vrcState, _vrcConnection, _vrcInfo, _vrcDeafen), 1, 0);
         layout.Controls.Add(status, 0, 0);
-        var muteCard = DirectionCard("MUTE DIRECTION", _muteModes);
-        ConfigureEnableButton(_systemEnabled);
-        muteCard.Controls.Add(_systemEnabled);
-        foreach (var radio in _muteModes.Values) radio.Top += 34;
+        var muteCard = DirectionCard("MUTE DIRECTION", _muteModes, _systemEnabled);
         layout.Controls.Add(muteCard, 0, 1);
 
-        var deafenCard = DirectionCard("DEAFEN PARAMETER DIRECTION", _deafenModes);
-        ConfigureEnableButton(_deafenEnabled);
-        deafenCard.Controls.Add(_deafenEnabled);
-        foreach (var radio in _deafenModes.Values) radio.Top += 34;
+        var deafenCard = DirectionCard("DEAFEN PARAMETER DIRECTION", _deafenModes, _deafenEnabled);
         layout.Controls.Add(deafenCard, 0, 2);
 
         var hint = NewLabel("Mute states stay opposite. Deafen states match the custom VRChat boolean directly.", 9);
@@ -120,34 +138,39 @@ public sealed class MainForm : Form
         return page;
     }
 
-    private TabPage BuildSettingsPage()
+    private Control BuildSettingsPage()
     {
-        var page = NewPage("Settings");
-        var grid = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, BackColor = Bg, Padding = new Padding(20), ColumnCount = 2, RowCount = 5 };
+        var page = NewPage();
+        page.AutoScroll = true;
+        var grid = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, BackColor = Panel, Padding = new Padding(22), ColumnCount = 2, RowCount = 6, Margin = new Padding(0, 10, 0, 0) };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
+        var heading = NewLabel("CONNECTION & PARAMETERS", 10, true); heading.AutoSize = true; heading.Padding = new Padding(5, 0, 0, 8);
+        grid.Controls.Add(heading, 0, 0); grid.SetColumnSpan(heading, 2);
         _oscMode.Items.AddRange(["OSCQuery (automatic)", "Manual IP and ports"]);
-        AddSetting(grid, 0, 0, "VRChat connection", _oscMode);
-        AddSetting(grid, 1, 0, "Manual VRChat IP", _vrchatIp);
-        AddSetting(grid, 0, 1, "Manual OSC send port", _sendPort);
-        AddSetting(grid, 1, 1, "Manual OSC receive port", _receivePort);
-        AddSetting(grid, 0, 2, "VRChat mute parameter", _muteParameter);
-        AddSetting(grid, 1, 2, "VRChat sync toggle parameter", _toggleParameter);
-        AddSetting(grid, 0, 3, "VRChat deafen boolean parameter", _deafenParameter);
+        AddSetting(grid, 0, 1, "VRChat connection", _oscMode);
+        AddSetting(grid, 1, 1, "Manual VRChat IP", _vrchatIp);
+        AddSetting(grid, 0, 2, "Manual OSC send port", _sendPort);
+        AddSetting(grid, 1, 2, "Manual OSC receive port", _receivePort);
+        AddSetting(grid, 0, 3, "VRChat mute parameter", _muteParameter);
+        AddSetting(grid, 1, 3, "VRChat sync toggle parameter", _toggleParameter);
+        AddSetting(grid, 0, 4, "VRChat deafen boolean parameter", _deafenParameter);
         var path = NewLabel("Settings: " + _store.SettingsPath, 8); path.AutoSize = true; path.Padding = new Padding(0, 12, 0, 0);
-        grid.Controls.Add(path, 1, 3);
+        grid.Controls.Add(path, 1, 4);
         _logging.AutoSize = true; _logging.ForeColor = TextColor; _logging.Padding = new Padding(0, 12, 0, 0);
-        grid.Controls.Add(_logging, 0, 4);
+        grid.Controls.Add(_logging, 0, 5);
         var auto = NewLabel("All changes save automatically. OSCQuery is recommended.", 9); auto.AutoSize = true; auto.ForeColor = Cyan; auto.Padding = new Padding(0, 12, 0, 0);
-        grid.Controls.Add(auto, 1, 4);
-        page.Controls.Add(grid);
+        grid.Controls.Add(auto, 1, 5);
+        var frame = new BorderedPanel(Border) { Dock = DockStyle.Top, Height = 505, BackColor = Panel, Margin = new Padding(0, 10, 0, 0) };
+        frame.Controls.Add(grid);
+        page.Controls.Add(frame);
         return page;
     }
 
     private Panel StatusCard(string title, params Label[] labels)
     {
-        var panel = NewPanel(); panel.Margin = new Padding(5); panel.Padding = new Padding(18);
+        var panel = NewPanel(); panel.Margin = new Padding(6); panel.Padding = new Padding(20);
         var heading = NewLabel(title, 9, true); heading.AutoSize = true; heading.Location = new Point(18, 12);
         panel.Controls.Add(heading);
         int y = 35;
@@ -155,29 +178,40 @@ public sealed class MainForm : Form
         return panel;
     }
 
-    private Panel DirectionCard(string title, Dictionary<SyncMode, RadioButton> destination)
+    private Panel DirectionCard(string title, Dictionary<SyncMode, RadioButton> destination, CheckBox enabled)
     {
-        var panel = NewPanel(); panel.Margin = new Padding(5); panel.Padding = new Padding(18);
-        var heading = NewLabel(title, 9, true); heading.AutoSize = true; heading.Location = new Point(18, 14); panel.Controls.Add(heading);
+        var panel = NewPanel(); panel.Margin = new Padding(6); panel.Padding = new Padding(18, 14, 18, 18);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Panel, ColumnCount = 3, RowCount = 3, Margin = new Padding(0) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.334f));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var heading = NewLabel(title, 9, true); heading.AutoSize = true; heading.Dock = DockStyle.Fill; layout.Controls.Add(heading, 0, 0); layout.SetColumnSpan(heading, 3);
+        ConfigureEnableButton(enabled); enabled.Dock = DockStyle.Left; layout.Controls.Add(enabled, 0, 1); layout.SetColumnSpan(enabled, 3);
         var items = new[] { (SyncMode.VrchatMaster, "VRChat master"), (SyncMode.Dynamic, "Dynamic"), (SyncMode.DiscordMaster, "Discord master") };
-        int x = 18;
+        int column = 0;
         foreach (var (mode, text) in items)
         {
             var radio = new RadioButton
             {
                 Appearance = Appearance.Button, Text = text, TextAlign = ContentAlignment.MiddleCenter,
                 FlatStyle = FlatStyle.Flat, BackColor = Panel2, ForeColor = MutedColor,
-                Size = new Size(220, 54), Location = new Point(x, 52), Tag = mode, Cursor = Cursors.Hand
+                Dock = DockStyle.Fill, Margin = new Padding(column == 0 ? 0 : 6, 8, column == 2 ? 0 : 6, 0), Tag = mode, Cursor = Cursors.Hand
             };
-            radio.FlatAppearance.BorderSize = 0;
-            destination[mode] = radio; panel.Controls.Add(radio); x += 232;
+            radio.FlatAppearance.BorderColor = Border;
+            radio.FlatAppearance.BorderSize = 1;
+            radio.FlatAppearance.MouseOverBackColor = Color.FromArgb(36, 49, 69);
+            destination[mode] = radio; layout.Controls.Add(radio, column++, 2);
         }
+        panel.Controls.Add(layout);
         return panel;
     }
 
     private static void AddSetting(TableLayoutPanel grid, int column, int row, string caption, Control editor)
     {
-        var box = new Panel { Dock = DockStyle.Fill, Height = 82, BackColor = Bg, Padding = new Padding(5) };
+        var box = new Panel { Dock = DockStyle.Fill, Height = 82, BackColor = Panel, Padding = new Padding(5) };
         var label = NewLabel(caption, 9); label.AutoSize = true; label.Location = new Point(5, 4);
         editor.Location = new Point(5, 28); editor.Width = 330; editor.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
         box.Controls.Add(label); box.Controls.Add(editor); grid.Controls.Add(box, column, row);
@@ -299,6 +333,7 @@ public sealed class MainForm : Form
         control.TextAlign = ContentAlignment.MiddleCenter;
         control.Cursor = Cursors.Hand;
         control.FlatAppearance.BorderSize = 0;
+        control.FlatAppearance.MouseOverBackColor = Panel2;
     }
 
     private static void StyleEnableButton(CheckBox control)
@@ -313,10 +348,34 @@ public sealed class MainForm : Form
         foreach (var (mode, radio) in controls) { radio.BackColor = mode == selected ? active : Panel2; radio.ForeColor = mode == selected ? activeText : MutedColor; }
     }
 
-    private static Panel NewPanel() => new() { Dock = DockStyle.Fill, BackColor = Panel, Margin = new Padding(5) };
-    private static TabPage NewPage(string text) => new(text) { BackColor = Bg, ForeColor = TextColor };
+    private static Button NavigationButton(string text)
+    {
+        var button = new Button { Text = text, Size = new Size(124, 40), Margin = new Padding(0, 0, 8, 0), FlatStyle = FlatStyle.Flat, BackColor = Bg, ForeColor = MutedColor, Cursor = Cursors.Hand };
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = Panel2;
+        return button;
+    }
+
+    private static void SelectNavigation(Button selected, Button other)
+    {
+        selected.BackColor = Panel2; selected.ForeColor = TextColor;
+        other.BackColor = Bg; other.ForeColor = MutedColor;
+    }
+
+    private static Panel NewPanel() => new BorderedPanel(Border) { Dock = DockStyle.Fill, BackColor = Panel, Margin = new Padding(5) };
+    private static Panel NewPage() => new() { Dock = DockStyle.Fill, BackColor = Bg, ForeColor = TextColor };
     private static Label NewLabel(string text, float size, bool bold = false) => new() { Text = text, ForeColor = bold ? TextColor : MutedColor, BackColor = Color.Transparent, Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular) };
     private static CheckBox NewCheck(string text) => new() { Text = text, ForeColor = TextColor, BackColor = Color.Transparent, FlatStyle = FlatStyle.Flat };
-    private static TextBox NewTextBox() => new() { BackColor = Panel2, ForeColor = TextColor, BorderStyle = BorderStyle.FixedSingle, Font = new Font("Segoe UI", 10) };
+    private static TextBox NewTextBox() => new() { BackColor = Panel2, ForeColor = TextColor, BorderStyle = BorderStyle.FixedSingle, Font = new Font("Segoe UI", 10), Height = 30 };
     private static NumericUpDown NewPort() => new() { Minimum = 1, Maximum = 65535, BackColor = Panel2, ForeColor = TextColor, BorderStyle = BorderStyle.FixedSingle, Width = 160 };
+}
+
+internal sealed class BorderedPanel(Color borderColor) : Panel
+{
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        using var pen = new Pen(borderColor);
+        e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+    }
 }

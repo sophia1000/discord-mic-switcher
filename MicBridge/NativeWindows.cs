@@ -13,9 +13,18 @@ internal static class NativeWindows
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint hwnd, out uint processId);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(nint hwnd, out Rect rect);
     [DllImport("user32.dll")] public static extern bool IsHungAppWindow(nint hwnd);
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct Rect { public int Left, Top, Right, Bottom; }
+
+    public static void EnableDarkTitleBar(nint hwnd)
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) return;
+        int enabled = 1;
+        if (DwmSetWindowAttribute(hwnd, 20, ref enabled, sizeof(int)) != 0)
+            DwmSetWindowAttribute(hwnd, 19, ref enabled, sizeof(int));
+    }
 
     public static nint FindDiscordWindow()
     {
