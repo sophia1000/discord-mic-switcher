@@ -1,5 +1,5 @@
 #define MyAppName "Sophia's Mic Bridge"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "Sophia"
 #define MyAppExeName "MicBridge.exe"
 
@@ -26,6 +26,7 @@ RestartApplications=no
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupLogging=yes
+SetupIconFile=..\assets\SophiasMicBridge.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
