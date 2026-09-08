@@ -19,6 +19,7 @@ public sealed class OscBridge : IDisposable
     private OSCQueryService? _oscQuery;
     private Task? _receiveTask;
     private Task? _discoveryTask;
+    private Task _voiceTask = Task.CompletedTask;
     private IPAddress? _sendAddress;
     private int _sendPort;
     private int _receivePort;
@@ -299,7 +300,7 @@ public sealed class OscBridge : IDisposable
         catch (Exception ex) { _log.Write("OSC send failed: " + ex.Message); return false; }
     }
 
-    private bool SendVoiceToggle()
+    internal bool SendVoiceToggle()
     {
         try
         {
@@ -310,12 +311,30 @@ public sealed class OscBridge : IDisposable
             }
 
             var endpoint = new IPEndPoint(_sendAddress, _sendPort);
-            byte[] pressed = BuildInt("/input/Voice", 1);
-            _sender.Send(pressed, pressed.Length, endpoint);
-            Thread.Sleep(Math.Clamp(_settings.VrchatVoicePressMs, 20, 1000));
-            byte[] released = BuildInt("/input/Voice", 0);
-            _sender.Send(released, released.Length, endpoint);
-            _log.Write($"VRChat /input/Voice pulse sent ({_settings.VrchatVoicePressMs}ms)");
+            int duration = Math.Clamp(_settings.VrchatVoicePressMs, 20, 1000);
+            var previous = _voiceTask;
+            int generation = _generation;
+            _voiceTask = Task.Run(async () =>
+            {
+                await previous.ConfigureAwait(false);
+                if (generation != _generation) return;
+                // A dedicated socket ensures a press is released even if the
+                // main OSC connection is restarted during the pulse.
+                using var sender = new UdpClient();
+                try
+                {
+                    byte[] pressed = BuildInt("/input/Voice", 1);
+                    sender.Send(pressed, pressed.Length, endpoint);
+                    try { await Task.Delay(duration).ConfigureAwait(false); }
+                    finally
+                    {
+                        byte[] released = BuildInt("/input/Voice", 0);
+                        sender.Send(released, released.Length, endpoint);
+                    }
+                    _log.Write($"VRChat /input/Voice pulse sent ({duration}ms)");
+                }
+                catch (Exception ex) { _log.Write("VRChat voice pulse failed: " + ex.Message); }
+            });
             return true;
         }
         catch (Exception ex)
@@ -402,5 +421,9 @@ public sealed class OscBridge : IDisposable
         }
     }
 
-    public void Dispose() => StopListener();
+    public void Dispose()
+    {
+        StopListener();
+        try { _voiceTask.Wait(1500); } catch { }
+    }
 }

@@ -1,5 +1,5 @@
 #define MyAppName "Sophia's Mic Bridge"
-#define MyAppVersion "1.0.3"
+#define MyAppVersion "1.0.4"
 #define MyAppPublisher "Sophia"
 #define MyAppExeName "MicBridge.exe"
 

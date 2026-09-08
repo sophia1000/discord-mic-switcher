@@ -21,6 +21,7 @@ public sealed class DiscordMonitor : IDisposable
     private AutomationElement? _deafenButton;
     private UIA3Automation? _automation;
     private nint _hwnd;
+    private DateTime _nextAttachAt, _nextScanAt;
     private bool? _rawMute, _rawDeafen;
     private int _muteStreak, _deafenStreak;
     private bool? _muted, _deafened;
@@ -96,12 +97,17 @@ public sealed class DiscordMonitor : IDisposable
     private static (bool?, int) Debounce(bool? raw, bool? previous, int streak)
     {
         if (!raw.HasValue) return (previous, 0);
-        return !previous.HasValue || raw != previous ? (raw, 1) : (previous, streak + 1);
+        return !previous.HasValue || raw != previous ? (raw, 1) : (previous, Math.Min(streak + 1, StableReadCount));
     }
 
     private (bool? mute, bool? deafen) ReadStates()
     {
-        if (_root is null || _hwnd == 0 || !NativeWindows.IsWindow(_hwnd)) Attach();
+        if (_root is null || _hwnd == 0 || !NativeWindows.IsWindow(_hwnd))
+        {
+            if (DateTime.UtcNow < _nextAttachAt) return (null, null);
+            _nextAttachAt = DateTime.UtcNow.AddSeconds(1);
+            Attach();
+        }
         if (_root is null || _hwnd == 0 || NativeWindows.IsHungAppWindow(_hwnd)) return (null, null);
         if (NativeWindows.RestoreDiscordBehindOtherWindows(_hwnd))
         {
@@ -155,10 +161,11 @@ public sealed class DiscordMonitor : IDisposable
 
     private void Scan()
     {
-        if (_root is null) return;
+        if (_root is null || DateTime.UtcNow < _nextScanAt) return;
+        _nextScanAt = DateTime.UtcNow.AddMilliseconds(500);
         var started = DateTime.UtcNow;
-        AutomationElement? mute = FindNamedToggle(_settings.DiscordMuteNames);
-        AutomationElement? deafen = FindNamedToggle(_settings.DiscordDeafenNames);
+        AutomationElement? mute = _muteButton ?? FindNamedToggle(_settings.DiscordMuteNames);
+        AutomationElement? deafen = _deafenButton ?? FindNamedToggle(_settings.DiscordDeafenNames);
         lock (_gate)
         {
             if (mute is not null) _muteButton = mute;
@@ -230,8 +237,6 @@ public sealed class DiscordMonitor : IDisposable
 
     private bool QueueCommand(bool target, bool muteCommand)
     {
-        AutomationElement? button;
-        int attempt;
         DateTime now = DateTime.UtcNow;
         lock (_gate)
         {
@@ -246,26 +251,24 @@ public sealed class DiscordMonitor : IDisposable
                 return expected == target;
             }
 
-            button = muteCommand ? _muteButton : _deafenButton;
-            attempt = button is null ? 0 : 1;
             if (muteCommand)
             {
                 _expectedMute = target;
                 _expectedMuteUntil = now + CommandTimeout;
-                _muteCommandAttempts = attempt;
-                _nextMuteCommandAt = now + (button is null ? TimeSpan.FromMilliseconds(50) : RetryDelay);
+                _muteCommandAttempts = 0;
+                _nextMuteCommandAt = now;
             }
             else
             {
                 _expectedDeafen = target;
                 _expectedDeafenUntil = now + CommandTimeout;
-                _deafenCommandAttempts = attempt;
-                _nextDeafenCommandAt = now + (button is null ? TimeSpan.FromMilliseconds(50) : RetryDelay);
+                _deafenCommandAttempts = 0;
+                _nextDeafenCommandAt = now;
             }
         }
 
-        if (button is not null && TryToggleButton(button, muteCommand, attempt)) return true;
-        _log.Write($"Discord {(muteCommand ? "mute" : "deafen")} command queued until accessibility control is ready");
+        // All accessibility commands execute on the polling thread, never on
+        // the OSC receiver or UI thread. The first attempt follows a fresh read.
         return true;
     }
 
@@ -276,6 +279,11 @@ public sealed class DiscordMonitor : IDisposable
         DateTime now = DateTime.UtcNow;
         lock (_gate)
         {
+            if (!_settings.SystemEnabled || _deafened != false || _rawDeafen != false)
+                _expectedMute = null;
+            if (!_settings.DeafenEnabled) _expectedDeafen = null;
+            if (_expectedMute == _muted && _rawMute == _muted) _expectedMute = null;
+            if (_expectedDeafen == _deafened && _rawDeafen == _deafened) _expectedDeafen = null;
             if (_expectedMute.HasValue)
             {
                 if (now > _expectedMuteUntil || _muteCommandAttempts >= MaxCommandAttempts)
@@ -314,6 +322,8 @@ public sealed class DiscordMonitor : IDisposable
         string command = muteCommand ? "mute" : "deafen";
         try
         {
+            if (muteCommand && (!_settings.SystemEnabled || ReadToggle(_deafenButton) != false)) return false;
+            if (!muteCommand && !_settings.DeafenEnabled) return false;
             if (!button.Patterns.Toggle.IsSupported) throw new InvalidOperationException("Toggle pattern is unavailable");
             button.Patterns.Toggle.Pattern.Toggle();
             _log.Write($"Discord {command} accessibility command sent (attempt {attempt})");

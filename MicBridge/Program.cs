@@ -52,6 +52,24 @@ internal static class Program
             }
             var oscSettings = new AppSettings { OscConnectionMode = OscConnectionMode.OscQuery, LoggingEnabled = false };
             var store = new SettingsStore();
+            // Exercise real UDP pulses against a test receiver, never VRChat.
+            using (var receiver = new System.Net.Sockets.UdpClient(new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 0)))
+            {
+                receiver.Client.ReceiveTimeout = 3000;
+                var pulseSettings = new AppSettings { OscConnectionMode = OscConnectionMode.Manual,
+                    OscReceivePort = 0, OscSendPort = ((System.Net.IPEndPoint)receiver.Client.LocalEndPoint!).Port,
+                    VrchatVoicePressMs = 300, LoggingEnabled = false };
+                using var pulseBridge = new OscBridge(pulseSettings, new AppLog(store, () => false));
+                pulseBridge.Start();
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                if (!pulseBridge.SendVoiceToggle() || clock.ElapsedMilliseconds >= 200) return 17;
+                System.Net.IPEndPoint remote = new(System.Net.IPAddress.Any, 0);
+                if (!OscBridge.TryParse(receiver.Receive(ref remote), out var pulseAddress, out var down)
+                    || pulseAddress != "/input/Voice" || !down) return 18;
+                clock.Restart();
+                if (!OscBridge.TryParse(receiver.Receive(ref remote), out pulseAddress, out down)
+                    || down || clock.ElapsedMilliseconds < 200) return 19;
+            }
             using (var bridge = new OscBridge(oscSettings, new AppLog(store, () => false)))
             {
                 bridge.Start();

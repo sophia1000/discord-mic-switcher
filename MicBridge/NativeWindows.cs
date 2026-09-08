@@ -48,7 +48,11 @@ internal static class NativeWindows
 
     public static nint FindDiscordWindow()
     {
-        var pids = Process.GetProcessesByName("Discord").Select(p => (uint)p.Id).ToHashSet();
+        var pids = new HashSet<uint>();
+        foreach (var process in Process.GetProcessesByName("Discord"))
+        {
+            using (process) pids.Add((uint)process.Id);
+        }
         nint best = 0;
         long bestArea = 0;
         EnumWindows((hwnd, _) =>

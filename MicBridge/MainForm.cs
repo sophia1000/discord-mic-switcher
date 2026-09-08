@@ -20,7 +20,8 @@ public sealed class MainForm : Form
     private readonly AppSettings _settings;
     private readonly SettingsStore _store;
     private readonly System.Windows.Forms.Timer _saveTimer = new() { Interval = 500 };
-    private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 150 };
+    private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 1000 };
+    private int _refreshPending;
     private bool _loading = true;
 
     private readonly Label _discordState = NewLabel("WAITING", 22, true);
@@ -283,7 +284,9 @@ public sealed class MainForm : Form
 
     private void CoordinatorUpdated()
     {
-        if (!IsDisposed && IsHandleCreated) BeginInvoke(RefreshStatus);
+        if (IsDisposed || !IsHandleCreated || Interlocked.Exchange(ref _refreshPending, 1) != 0) return;
+        try { BeginInvoke(() => { Interlocked.Exchange(ref _refreshPending, 0); RefreshStatus(); }); }
+        catch (InvalidOperationException) { Interlocked.Exchange(ref _refreshPending, 0); }
     }
 
     private void RefreshStatus()

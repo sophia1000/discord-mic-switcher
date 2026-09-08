@@ -10,7 +10,7 @@
     <AssemblyTitle>Sophia's Mic Bridge</AssemblyTitle>
     <Product>Sophia's Mic Bridge</Product>
     <Description>Keeps Discord and VRChat microphone states synchronized.</Description>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
